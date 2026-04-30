@@ -600,68 +600,70 @@ const app = {
             app.layers.lv = null;
         }
     },
-    async loadLVLayer(munCode, munName) {
-        const loader = document.getElementById('loader');
-        loader.querySelector('#loaderText').textContent = "Carregando locais de votação...";
-        loader.classList.remove('hidden');
+// Função que carrega os locais de votação de um município
+async loadLVLayer(munCode, munName) {
+    const loader = document.getElementById('loader');
+    loader.querySelector('#loaderText').textContent = 'Carregando locais de votação...';
+    loader.classList.remove('hidden');
+
+    try {
+        // 1. Busca o JSON do município
+        const response = await fetch(`lv_results/${munCode}.json`);
+        if (!response.ok) throw new Error('JSON do município não encontrado');
+
+        const munData = await response.json();
+        const turn = document.getElementById('turnSelect').value;
+        const lvData = munData[turn] || {};
+
+        // 2. Carrega o GeoJSON dos LVs da UF correspondente (já existente no cache)
         const uf = munCode.substring(0, 2);
-        app.state.currentUF = uf;
-        try {
-            const [lvGeo, voteData] = await Promise.all([
-                app.fetchLVGeoJSON(uf),
-                app.fetchUFVoteData(uf)
-            ]);
-            const lvFeatures = lvGeo.features.filter(f => {
+        await this.fetchLVGeoJSON(uf);
+        const allLvFeatures = this.data.lvGeoCache[uf].features;
+
+        // 3. Filtra apenas os LVs do município e anexa os resultados
+        const lvFeatures = allLvFeatures
+            .filter(f => {
                 const lvId = f.properties.lv_id || '';
                 return lvId.startsWith(munCode + '_');
-            });
-            if (lvFeatures.length === 0) {
-                alert("Nenhum local de votação encontrado para este município.");
-                app.goBack();
-                return;
-            }
-            // Mesclar votação em cada feature
-            const turn = document.getElementById('turnSelect').value;
-            const role = document.getElementById('roleSelect').value;
-            lvFeatures.forEach(f => {
+            })
+            .map(f => {
                 const lvId = f.properties.lv_id;
-                const votes = {};
-                voteData.forEach(v => {
-                    if (String(v.turno).trim() === turn &&
-                        String(v.DS_CARGO).trim() === role &&
-                        String(v.lv_id).trim() === lvId) {
-                        const party = NUM_TO_PARTY[String(v.NR_VOTAVEL).trim()] || 'OUTROS';
-                        const key = `${v.NM_VOTAVEL} (${party})`;
-                        votes[key] = (votes[key] || 0) + (Number(v.QT_VOTOS) || 0);
-                    }
-                });
-                f.properties.votes = votes;
+                f.properties.votes = lvData[lvId] || {};
+                return f;
             });
-            // Remove camadas anteriores
-            if (app.layers.cities) app.map.removeLayer(app.layers.cities);
-            if (app.layers.brazil) app.map.removeLayer(app.layers.brazil);
-            app.clearLVLayer();
 
-            app.layers.lv = L.geoJSON({ type: 'FeatureCollection', features: lvFeatures }, {
-                smoothFactor: 0.2,
-                style: f => app.getLVStyle(f),
-                onEachFeature: (f, l) => {
-                    const lvId = f.properties.lv_id;
-                    l.on('click', () => app.selectRegion(lvId, f.properties.nm_locvot || 'Local'));
-                    l.bindTooltip(() => app.getLVTooltip(f), { sticky: true, direction: 'top' });
-                }
-            }).addTo(app.map);
-            app.map.fitBounds(app.layers.lv.getBounds());
-            app.state.drillLevel = 'lv';
-            app.selectRegion(munCode, munName);
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao carregar dados dos locais de votação.");
-            app.goBack();
-        } finally {
-            loader.classList.add('hidden');
+        if (lvFeatures.length === 0) {
+            alert('Nenhum local de votação neste município.');
+            this.goBack();
+            return;
         }
-    },
+
+        // 4. Remove camadas anteriores e exibe os LVs
+        if (this.layers.cities) this.map.removeLayer(this.layers.cities);
+        if (this.layers.lv) this.map.removeLayer(this.layers.lv);
+        if (this.layers.brazil) this.map.removeLayer(this.layers.brazil);
+
+        this.layers.lv = L.geoJSON(lvFeatures, {
+            smoothFactor: 0.2,
+            style: f => this.getLVStyle(f),
+            onEachFeature: (f, l) => {
+                const lvId = f.properties.lv_id;
+                l.on('click', () => this.selectRegion(lvId, f.properties.nm_locvot || 'Local'));
+                l.bindTooltip(() => this.getLVTooltip(f), { sticky: true, direction: 'top' });
+            }
+        }).addTo(this.map);
+
+        this.map.fitBounds(this.layers.lv.getBounds());
+        this.state.drillLevel = 'lv';
+        this.selectRegion(munCode, munName);
+    } catch (e) {
+        console.error(e);
+        alert('Erro ao carregar dados de locais de votação.');
+        this.goBack();
+    } finally {
+        loader.classList.add('hidden');
+    }
+},
     async fetchLVGeoJSON(uf) {
         if (app.data.lvGeoCache[uf]) return app.data.lvGeoCache[uf];
         const url = `https://huggingface.co/datasets/octoz/dataLV/resolve/main/lv_${uf}.geojson`;
