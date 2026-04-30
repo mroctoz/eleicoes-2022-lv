@@ -3,788 +3,704 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eleições 2022 - Visão Detalhada por Locais de Votação</title>
-
-    <!-- Google Fonts: Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Eleições 2022 – Locais de Votação</title>
     
-    <!-- Font Awesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <!-- Turf.js para processamento geoespacial em Mocks (Fallback) -->
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
 
     <style>
-        /* === VARIÁVEIS DE COR E ESTILO === */
         :root {
-            --bg: #0d0d12;
-            --panel-bg: rgba(18, 20, 28, 0.85);
-            --border: rgba(255, 255, 255, 0.08);
-            --text-main: #f0f0f5;
-            --text-muted: #a1a1aa;
-            --accent: #4d7cff;
+            --bg: #111; --sidebar-bg: #1a1a1a; --border-color: #333;
+            --text-muted: #888; --accent-blue: #4da3ff; --btn-bg: #2a2a2a; --btn-hover: #444;
         }
-
-        /* === RESET & BASE === */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html {
-            width: 100%; height: 100%;
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            overflow: hidden;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: white; overflow: hidden; }
+        #app { display: grid; grid-template-columns: 260px 1fr 260px; height: 100vh; width: 100vw; }
+        .sidebar { background: var(--sidebar-bg); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; }
+        .sidebar-right { border-right: none; border-left: 1px solid var(--border-color); }
+        .header { padding: 20px; border-bottom: 1px solid var(--border-color); }
+        .header h1 { font-size: 1.4rem; font-weight: 700; }
+        .header h2 { font-size: 1.2rem; font-weight: 600; }
+        .controls { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        .control-group label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; }
+        select, .btn-primary, .btn-back {
+            background: var(--btn-bg); border: 1px solid var(--border-color); color: white;
+            padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; transition: 0.2s;
         }
-
-        /* === MAPA === */
-        #map {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: 1;
-            background: var(--bg);
-        }
-
-        /* === LOADER === */
-        #loader {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(13, 13, 18, 0.95);
-            z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.4s ease;
-        }
-        #loader.hidden { opacity: 0; pointer-events: none; }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(255,255,255,0.1);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            margin-bottom: 24px;
-        }
-        #loaderText { font-weight: 500; font-size: 1.1rem; letter-spacing: 0.5px; color: #fff; }
+        select:hover, .btn-primary:hover, .btn-back:hover { background: var(--btn-hover); }
+        .btn-primary { background: var(--accent-blue); border: none; font-weight: 600; }
+        .btn-back { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 15px; }
+        #map { height: 100%; width: 100%; z-index: 1; }
+        .map-controls { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 1000; }
+        .map-btn { width: 36px; height: 36px; background: var(--sidebar-bg); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; font-size: 18px; }
+        .legend { position: absolute; bottom: 20px; left: 20px; background: var(--sidebar-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px; z-index: 1000; width: 200px; }
+        .legend-grid { display: flex; gap: 2px; margin-top: 4px; }
+        .legend-item { flex: 1; height: 12px; border-radius: 2px; border: 1px solid var(--border-color); }
+        .cand-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: 0.2s; }
+        .cand-row:hover { background: rgba(255,255,255,0.05); }
+        .cand-check { width: 18px; height: 18px; border: 2px solid #555; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+        .cand-check.checked { background: var(--accent-blue); border-color: var(--accent-blue); }
+        .cand-check.checked::after { content: '✓'; color: white; }
+        .cand-color { width: 20px; height: 20px; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+        .cand-info { flex: 1; }
+        .cand-head { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+        .cand-sub { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); }
+        .progress-bar { height: 4px; background: #333; border-radius: 2px; margin-top: 4px; }
+        .progress-fill { height: 100%; border-radius: 2px; }
+        .disabled { opacity: 0.4; }
+        .custom-tooltip { background: var(--sidebar-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; color: white; font-size: 0.85rem; }
+        .tt-head { font-weight: 700; margin-bottom: 4px; }
+        .tt-body { margin-top: 4px; }
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; }
+        .spinner { width: 50px; height: 50px; border: 4px solid var(--border-color); border-top: 4px solid var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* === PAINEIS E GLASSMORPHISM === */
-        .glass-panel {
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--border);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            border-radius: 16px;
-            z-index: 10;
-        }
-
-        /* BARRA ESQUERDA (CONTROLES) */
-        .sidebar-left {
-            position: absolute;
-            top: 24px; left: 24px;
-            width: 320px;
-            padding: 24px;
-            display: flex; flex-direction: column; gap: 20px;
-        }
-        .header-title h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 4px; }
-        .header-title p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
-
-        .control-group { display: flex; flex-direction: column; gap: 8px; }
-        .control-group label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
-        .control-group select {
-            width: 100%; padding: 12px 14px;
-            background: rgba(0,0,0,0.3); border: 1px solid var(--border);
-            border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif;
-            font-size: 0.95rem; outline: none; appearance: none;
-            cursor: pointer; transition: border-color 0.2s;
-        }
-        .control-group select:focus { border-color: var(--accent); }
-        .control-group select:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        /* BARRA DIREITA (RESULTADOS) */
-        .sidebar-right {
-            position: absolute;
-            top: 24px; right: 24px;
-            width: 380px;
-            max-height: calc(100vh - 48px);
-            display: flex; flex-direction: column;
-            overflow: hidden;
-        }
-        .sidebar-right .header { padding: 20px 24px; border-bottom: 1px solid var(--border); }
-        .breadcrumbs { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .breadcrumbs span { cursor: pointer; transition: color 0.2s; font-weight: 500; }
-        .breadcrumbs span:hover { color: #fff; }
-        .breadcrumbs .separator { font-size: 0.65rem; opacity: 0.5; }
-        
-        .sidebar-right h2 { font-size: 1.4rem; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 4px; }
-        .region-type { font-size: 0.75rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
-
-        .total-votes-panel { padding: 20px 24px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border); }
-        .total-votes-panel .label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; }
-        .total-votes-panel .value { font-size: 2.2rem; font-weight: 800; color: #fff; letter-spacing: -1px; line-height: 1; }
-
-        .results-container { padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px; }
-
-        /* SCROLLBAR */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-
-        /* CANDIDATE ROW */
-        .cand-row {
-            display: flex; align-items: stretch; gap: 14px;
-            padding: 14px; background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.05);
-            border-radius: 12px;
-            transition: transform 0.2s, background 0.2s;
-        }
-        .cand-row:hover { transform: translateY(-2px); background: rgba(255,255,255,0.06); }
-        .cand-color { width: 6px; border-radius: 6px; flex-shrink: 0; }
-        .cand-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
-        .cand-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        .cand-head .name { font-weight: 700; font-size: 0.95rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-        .cand-head .pct { font-weight: 800; font-size: 1.05rem; }
-        .cand-sub { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; font-weight: 500; }
-        .progress-bar { width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
-        .progress-fill { height: 100%; border-radius: 3px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
-
-        /* TOOLTIP CUSTOMIZADO (LEAFLET) */
-        .leaflet-tooltip.custom-leaflet-tooltip {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-        }
-        .leaflet-tooltip-left::before, .leaflet-tooltip-right::before, 
-        .leaflet-tooltip-top::before, .leaflet-tooltip-bottom::before { display: none !important; }
-        
-        .tooltip-container {
-            font-family: 'Inter', sans-serif; min-width: 240px;
-            background: rgba(20, 22, 30, 0.95); backdrop-filter: blur(8px);
-            color: #fff; padding: 16px; border-radius: 12px;
-            border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            pointer-events: none;
-        }
-        .tooltip-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px; letter-spacing: 0.5px; }
-        .tooltip-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; line-height: 1.2; }
-        .tooltip-address { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4; display: flex; gap: 6px; }
-        .tooltip-address i { margin-top: 3px; color: var(--accent); }
-        .tooltip-divider { height: 1px; background: var(--border); margin: 12px 0; }
-        .tooltip-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.9rem; }
-        .tooltip-row .cand-name { color: #e4e4e7; font-weight: 500; }
-        .tooltip-row .cand-pct { font-weight: 800; }
-        .tooltip-footer { font-size: 0.75rem; color: var(--text-muted); text-align: right; margin-top: 8px; font-weight: 500; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-<!-- LOADER -->
-<div id="loader">
+<div id="loader" class="hidden">
     <div class="spinner"></div>
-    <h3 id="loaderText">Carregando Mapa do Brasil...</h3>
+    <h3 id="loaderText">Carregando dados...</h3>
 </div>
 
-<!-- LEAFLET MAP -->
-<div id="map"></div>
-
-<!-- BARRA ESQUERDA -->
-<aside class="sidebar-left glass-panel">
-    <div class="header-title">
-        <h1>Eleições 2022</h1>
-        <p>Visão de alta resolução.<br>Explore do nível Nacional até Locais de Votação (LVs).</p>
-    </div>
-    
-    <div class="control-group">
-        <label><i class="fas fa-calendar"></i> Ano da Eleição</label>
-        <select id="yearSelect" disabled>
-            <option value="2022">2022 (Exclusivo API)</option>
-        </select>
-    </div>
-
-    <div class="control-group">
-        <label><i class="fas fa-user-tie"></i> Cargo</label>
-        <select id="roleSelect" disabled>
-            <option value="president">Presidente</option>
-        </select>
-    </div>
-
-    <div class="control-group" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-        <i class="fas fa-info-circle" style="color: var(--accent); margin-right: 4px;"></i>
-        <strong>Interação:</strong> Clique em um Estado para ver os Municípios. Clique em um Município para carregar o mapa detalhado por <strong>Locais de Votação (LVs)</strong> via API.
-    </div>
-</aside>
-
-<!-- BARRA DIREITA -->
-<aside class="sidebar-right glass-panel">
-    <div class="header">
-        <div id="breadcrumbs" class="breadcrumbs">
-            <span onclick="app.resetToNational()"><i class="fas fa-home"></i> Brasil</span>
+<div id="app">
+    <aside class="sidebar">
+        <div class="header">
+            <h1>Eleições 2022</h1>
+            <div style="font-size: 0.8rem; color: white;">Resultado por Local de Votação</div>
         </div>
-        <h2 id="regionName">Brasil</h2>
-        <div id="regionType" class="region-type">Nacional</div>
+        <div class="controls">
+            <div class="control-group">
+                <label>TURNO</label>
+                <select id="turnSelect">
+                    <option value="1">1º Turno</option>
+                    <option value="2">2º Turno</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>CARGO</label>
+                <select id="roleSelect"></select>
+            </div>
+            <button class="btn-primary" onclick="app.refreshMap()">ATUALIZAR MAPA</button>
+        </div>
+    </aside>
+
+    <div id="map"></div>
+
+    <aside class="sidebar sidebar-right">
+        <div class="header">
+            <h2 id="regionName">Brasil</h2>
+            <div style="font-size: 0.8rem; color: var(--accent-blue);" id="regionType">Nacional</div>
+        </div>
+        <div style="padding: 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--border-color);">
+            <button id="btnBack" class="btn-back" style="display: none;" onclick="app.resetSelection()">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+            <button id="btnToggleLV" class="btn-back" style="display: none;" onclick="app.toggleLVMode()">
+                <i class="fas fa-map-marker-alt"></i> <span id="btnToggleLVText">Ver Locais de Votação</span>
+            </button>
+            <div style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted);">Votos Totais</div>
+            <div id="totalVotesVal" style="font-size: 1.4rem; font-weight: 800; color: white;">-</div>
+        </div>
+        <div class="controls" id="resultsContainer"></div>
+    </aside>
+
+    <div class="map-controls">
+        <div class="map-btn" onclick="app.map.zoomIn()">+</div>
+        <div class="map-btn" onclick="app.map.zoomOut()">−</div>
     </div>
 
-    <div class="total-votes-panel">
-        <div class="label">Votos Válidos Totais</div>
-        <div id="totalVotesVal" class="value">-</div>
+    <div class="legend">
+        <div style="font-size: 0.8rem; margin-bottom: 8px; font-weight: 700; color: white;">Percentual do Vencedor</div>
+        <div class="legend-grid" id="legendColors"></div>
+        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#aaa; margin-top:5px;">
+            <span>≤20%</span><span>100%</span>
+        </div>
     </div>
-
-    <div class="results-container" id="resultsContainer">
-        <!-- Linhas de candidatos injetadas via JS -->
-    </div>
-</aside>
-
+</div>
 
 <script>
-/**
- * ============================================================================
- * CONFIGURAÇÃO DE API HUGGING FACE
- * ============================================================================
- * O usuário indicou que os dados dos Locais de Votação (LVs) estão em:
- * https://huggingface.co/spaces/octoz/eleicoes2022-api
- * 
- * Como as rotas exatas da API não foram fornecidas no prompt, estas variáveis 
- * definem a estrutura padrão esperada. O sistema fará o fetch nestas URLs.
- * Caso a API falhe (ex: CORS, rota diferente, space offline), o sistema 
- * intercepta a falha e gera Mocks (dados falsos perfeitos usando a geometria 
- * do município) para que a aplicação continue 100% visual e funcional na 
- * demonstração.
- */
-const API_CONFIG = {
-    baseUrl: "https://octoz-eleicoes2022-api.hf.space",
-    
-    // Rota esperada para o GeoJSON com os Polígonos/Setores de um Município
-    getGeoJsonUrl: (munCode) => `${API_CONFIG.baseUrl}/api/municipio/${munCode}/geojson`,
-    
-    // Rota esperada para os resultados de votação (JSON) daquele Município
-    getVotesUrl: (munCode) => `${API_CONFIG.baseUrl}/api/municipio/${munCode}/votos`
-};
+(function() {
+    'use strict';
 
-/**
- * ============================================================================
- * PALETA DE CORES E DICIONÁRIOS
- * ============================================================================
- */
-const CONFIG = {
-    colors: {
-        'PT': '#E12525', 'PL': '#0056A8', 'PDT': '#F58220', 'MDB': '#008000',
-        'UNIÃO': '#0056A8', 'PSDB': '#009EE3', 'NOVO': '#F58220', 'PSOL': '#FFCC00',
-        'DEFAULT': '#888888'
-    },
-    partyByNumber: {
-        "13": "PT", "22": "PL", "12": "PDT", "15": "MDB", "44": "UNIÃO",
-        "45": "PSDB", "30": "NOVO", "50": "PSOL", "14": "PTB", "80": "UP",
-        "21": "PCB", "16": "PSTU", "27": "DC", "28": "PRTB"
-    }
-};
+    // ---------- CONFIG ----------
+    const API_BASE = "https://octoz-eleicoes2022-api.hf.space";
 
-/**
- * ============================================================================
- * DADOS MOCKADOS INICIAIS (NACIONAL 2022 - 2º TURNO - Fictício/Aproximado)
- * Para garantir que o mapa carregue imediatamente com visual espetacular
- * sem necessitar do download do arquivo JSON original de estados.
- * ============================================================================
- */
-const MOCK_2022_STATES = {
-    "12": { "JAIR BOLSONARO (PL)": 70.3, "LUIZ INÁCIO LULA DA SILVA (PT)": 29.7 },
-    "27": { "LUIZ INÁCIO LULA DA SILVA (PT)": 58.6, "JAIR BOLSONARO (PL)": 41.4 },
-    "13": { "LUIZ INÁCIO LULA DA SILVA (PT)": 51.1, "JAIR BOLSONARO (PL)": 48.9 },
-    "16": { "LUIZ INÁCIO LULA DA SILVA (PT)": 51.3, "JAIR BOLSONARO (PL)": 48.7 },
-    "29": { "LUIZ INÁCIO LULA DA SILVA (PT)": 72.1, "JAIR BOLSONARO (PL)": 27.9 },
-    "23": { "LUIZ INÁCIO LULA DA SILVA (PT)": 69.9, "JAIR BOLSONARO (PL)": 30.1 },
-    "53": { "JAIR BOLSONARO (PL)": 58.8, "LUIZ INÁCIO LULA DA SILVA (PT)": 41.2 },
-    "32": { "JAIR BOLSONARO (PL)": 58.0, "LUIZ INÁCIO LULA DA SILVA (PT)": 42.0 },
-    "52": { "JAIR BOLSONARO (PL)": 58.7, "LUIZ INÁCIO LULA DA SILVA (PT)": 41.3 },
-    "21": { "LUIZ INÁCIO LULA DA SILVA (PT)": 71.1, "JAIR BOLSONARO (PL)": 28.9 },
-    "31": { "LUIZ INÁCIO LULA DA SILVA (PT)": 50.2, "JAIR BOLSONARO (PL)": 49.8 },
-    "50": { "JAIR BOLSONARO (PL)": 59.4, "LUIZ INÁCIO LULA DA SILVA (PT)": 40.6 },
-    "51": { "JAIR BOLSONARO (PL)": 65.0, "LUIZ INÁCIO LULA DA SILVA (PT)": 35.0 },
-    "15": { "LUIZ INÁCIO LULA DA SILVA (PT)": 54.7, "JAIR BOLSONARO (PL)": 45.3 },
-    "25": { "LUIZ INÁCIO LULA DA SILVA (PT)": 66.6, "JAIR BOLSONARO (PL)": 33.4 },
-    "26": { "LUIZ INÁCIO LULA DA SILVA (PT)": 66.9, "JAIR BOLSONARO (PL)": 33.1 },
-    "22": { "LUIZ INÁCIO LULA DA SILVA (PT)": 76.8, "JAIR BOLSONARO (PL)": 23.2 },
-    "41": { "JAIR BOLSONARO (PL)": 62.4, "LUIZ INÁCIO LULA DA SILVA (PT)": 37.6 },
-    "33": { "JAIR BOLSONARO (PL)": 56.5, "LUIZ INÁCIO LULA DA SILVA (PT)": 43.5 },
-    "24": { "LUIZ INÁCIO LULA DA SILVA (PT)": 65.1, "JAIR BOLSONARO (PL)": 34.9 },
-    "11": { "JAIR BOLSONARO (PL)": 70.6, "LUIZ INÁCIO LULA DA SILVA (PT)": 29.4 },
-    "14": { "JAIR BOLSONARO (PL)": 76.0, "LUIZ INÁCIO LULA DA SILVA (PT)": 24.0 },
-    "43": { "JAIR BOLSONARO (PL)": 56.3, "LUIZ INÁCIO LULA DA SILVA (PT)": 43.7 },
-    "42": { "JAIR BOLSONARO (PL)": 69.2, "LUIZ INÁCIO LULA DA SILVA (PT)": 30.8 },
-    "28": { "LUIZ INÁCIO LULA DA SILVA (PT)": 67.2, "JAIR BOLSONARO (PL)": 32.8 },
-    "35": { "JAIR BOLSONARO (PL)": 55.2, "LUIZ INÁCIO LULA DA SILVA (PT)": 44.8 },
-    "17": { "LUIZ INÁCIO LULA DA SILVA (PT)": 51.3, "JAIR BOLSONARO (PL)": 48.7 }
-};
-// Converte os percentuais em números inteiros massivos para simular dados reais.
-Object.keys(MOCK_2022_STATES).forEach(uf => {
-    let baseVotes = Math.floor(1000000 + Math.random() * 4000000);
-    let st = MOCK_2022_STATES[uf];
-    for (let c in st) { st[c] = Math.floor(baseVotes * (st[c] / 100)); }
-});
+    const GRADIENT_SCHEME = [
+        { min: 0,  mix: '#ffffff', ratio: 0.85, ref: '#E6E6E6' },
+        { min: 20, mix: '#ffffff', ratio: 0.65, ref: '#CCCCCC' },
+        { min: 30, mix: '#ffffff', ratio: 0.45, ref: '#B2B2B2' },
+        { min: 40, mix: '#ffffff', ratio: 0.25, ref: '#999999' },
+        { min: 50, mix: '#000000', ratio: 0.10, ref: '#808080' },
+        { min: 60, mix: '#000000', ratio: 0.25, ref: '#666666' },
+        { min: 70, mix: '#000000', ratio: 0.45, ref: '#4D4D4D' },
+        { min: 80, mix: '#000000', ratio: 0.60, ref: '#343434' },
+        { min: 90, mix: '#000000', ratio: 0.75, ref: '#202020' },
+        { min: 100,mix: '#000000', ratio: 0.90, ref: '#000000' }
+    ];
 
-/**
- * ============================================================================
- * LÓGICA PRINCIPAL DA APLICAÇÃO
- * ============================================================================
- */
-const app = {
-    map: null,
-    layers: { states: null, cities: null, lvs: null },
-    data: {
-        geoJsonStates: null,
-        geoJsonCities: null,
-        mockMun: {} // Cache para os municípios mockados para manter consistência nas cores
-    },
-    state: {
-        view: 'national', // 'national', 'cities', 'lv'
-        selectedUFId: null,
-        selectedUFName: null,
-        selectedMunId: null,
-        selectedMunName: null
-    },
+    const PARTY_COLORS = {
+        'PT': '#E12525', 'PL': '#0056A8', 'PSB': '#E12525', 'PDT': '#F58220',
+        'UNIÃO': '#0056A8', 'PSDB': '#009EE3', 'MDB': '#008000', 'PSD': '#FAA21B',
+        'PP': '#0066CC', 'NOVO': '#F58220', 'REPUBLICANOS': '#0066CC',
+        'SOLIDARIEDADE': '#F58220', 'PATRIOTA': '#FFD700', 'PCdoB': '#FF0000',
+        'PV': '#00FF00', 'CIDADANIA': '#FFA500', 'AVANTE': '#800080',
+        'PSOL': '#FFCC00', 'REDE': '#00FF7F', 'OUTROS': '#666666', 'DEFAULT': '#555555'
+    };
 
-    // --- INIT ---
-    init: () => {
-        // Inicializa o Mapa Leaflet
-        app.map = L.map('map', {
-            center:[-15.7801, -47.9292], zoom: 4, zoomControl: false,
-            preferCanvas: true
-        });
-        
-        // BaseLayer: CartoDB Dark Matter para dar um contraste perfeito às cores dos LVs
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CartoDB',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(app.map);
+    // ---------- APP ----------
+    const app = {
+        map: null,
+        layers: { brazil: null, cities: null, lv: null },
+        data: {
+            ufData: null,
+            aggMunicipios: {},
+            aggEstados: {},
+            brasilMunicipiosGeoJSON: null,
+            lvGeoJSON: {}
+        },
+        state: {
+            role: 'Presidente',
+            turn: '1',
+            selectedId: null,
+            selectedName: "Brasil",
+            lvMode: false,
+            ignored: new Set(),
+            customColors: JSON.parse(localStorage.getItem('v2022_colors') || '{}')
+        },
+        rolesList: [],
 
-        L.control.zoom({ position: 'bottomright' }).addTo(app.map);
+        async init() {
+            this.map = L.map('map', {
+                center: [-15, -50], zoom: 4, zoomControl: false, preferCanvas: true
+            });
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { opacity: 0.4 }).addTo(this.map);
 
-        app.loadNational();
-    },
+            const legendDiv = document.getElementById('legendColors');
+            [20,30,40,50,60,70,80,90,100].forEach(pct => {
+                const el = document.createElement('div');
+                el.className = 'legend-item';
+                el.style.background = this.getGradientConfig(pct).ref;
+                legendDiv.appendChild(el);
+            });
 
-    // --- UI CONTROLS ---
-    showLoader: (msg) => {
-        document.getElementById('loaderText').textContent = msg;
-        document.getElementById('loader').classList.remove('hidden');
-    },
-    hideLoader: () => {
-        document.getElementById('loader').classList.add('hidden');
-    },
+            await this.discoverRoles();
+            this.setupEventListeners();
+            this.loadBrazilLayer();
+        },
 
-    updateBreadcrumbs: () => {
-        const bc = document.getElementById('breadcrumbs');
-        let html = `<span onclick="app.resetToNational()"><i class="fas fa-home"></i> Brasil</span>`;
-        
-        if (app.state.view === 'cities' || app.state.view === 'lv') {
-            html += `<i class="fas fa-chevron-right separator"></i>
-                     <span onclick="app.loadStateCities('${app.state.selectedUFId}', '${app.state.selectedUFName}')">${app.state.selectedUFName}</span>`;
-        }
-        if (app.state.view === 'lv') {
-            html += `<i class="fas fa-chevron-right separator"></i>
-                     <span>${app.state.selectedMunName}</span>`;
-        }
-        bc.innerHTML = html;
-    },
+        setupEventListeners() {
+            document.getElementById('turnSelect').addEventListener('change', e => {
+                this.state.turn = e.target.value;
+                this.aggregateAndRefresh();
+            });
+            document.getElementById('roleSelect').addEventListener('change', e => {
+                this.state.role = e.target.value;
+                this.aggregateAndRefresh();
+            });
+        },
 
-    // --- CORES & ESTILOS ---
-    getCandColor: (party) => CONFIG.colors[party] || CONFIG.colors['DEFAULT'],
-    
-    getPartyFromName: (nameWithParty) => {
-        const match = nameWithParty.match(/\((.*?)\)/);
-        return match ? match[1] : "OUTROS";
-    },
-
-    getPartyByNumber: (nr) => CONFIG.partyByNumber[nr] || "OUTROS",
-
-    // Interpolação suave de cores: do escuro neutro para a cor pura do partido
-    getIntensityColor: (partyColor, pct) => {
-        if (pct < 0.5) pct = 0.5;
-        let factor = (pct - 0.5) * 2;
-        factor = Math.pow(factor, 0.8); // Curva de aceleração visual
-
-        const hex = (c) => c.startsWith('#') ? c.slice(1) : c;
-        const c1 = parseInt(hex('#2a2a35'), 16); // dark grey base
-        const c2 = parseInt(hex(partyColor), 16);
-
-        const r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
-        const r2 = (c2 >> 16) & 255, g2 = (c2 >> 8) & 255, b2 = c2 & 255;
-
-        const r = Math.round(r1 + factor * (r2 - r1));
-        const g = Math.round(g1 + factor * (g2 - g1));
-        const b = Math.round(b1 + factor * (b2 - b1));
-
-        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-    },
-
-    // --- PROCESSAMENTO DE VOTOS ---
-    // Retorna um objeto estatístico padrão
-    buildStats: (candidatesObj) => {
-        let total = 0, max = -1, winner = null;
-        Object.entries(candidatesObj).forEach(([cand, votes]) => {
-            total += votes;
-            if (votes > max) { max = votes; winner = cand; }
-        });
-        const winnerParty = winner ? app.getPartyFromName(winner) : "DEFAULT";
-        return { total, winner, winnerParty, winnerPct: total > 0 ? max / total : 0, candidates: candidatesObj };
-    },
-
-    // --- CARREGAMENTO NACIONAL (ESTADOS) ---
-    loadNational: async () => {
-        app.showLoader("Carregando Mapa do Brasil...");
-        try {
-            if (!app.data.geoJsonStates) {
-                const res = await fetch('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson');
-                app.data.geoJsonStates = await res.json();
-                const ufMap = {'AC':'12','AL':'27','AM':'13','AP':'16','BA':'29','CE':'23','DF':'53','ES':'32','GO':'52','MA':'21','MG':'31','MS':'50','MT':'51','PA':'15','PB':'25','PE':'26','PI':'22','PR':'41','RJ':'33','RN':'24','RO':'11','RR':'14','RS':'43','SC':'42','SE':'28','SP':'35','TO':'17'};
-                app.data.geoJsonStates.features.forEach(f => f.properties.id = ufMap[f.properties.sigla]);
+        async discoverRoles() {
+            try {
+                const res = await fetch(`${API_BASE}/uf/35`);
+                if (!res.ok) throw new Error('Falha na API');
+                const data = await res.json();
+                this.rolesList = [...new Set(data.map(r => r.DS_CARGO?.trim()))].filter(Boolean).sort();
+            } catch (e) {
+                console.warn('Erro ao carregar cargos, usando lista padrão.');
+                this.rolesList = ['Presidente', 'Governador', 'Senador', 'Deputado Federal', 'Deputado Estadual'];
             }
+            const select = document.getElementById('roleSelect');
+            select.innerHTML = this.rolesList.map(r => `<option value="${r}">${r}</option>`).join('');
+            this.state.role = this.rolesList[0] || 'Presidente';
+            select.value = this.state.role;
+        },
 
-            if (app.layers.cities) app.map.removeLayer(app.layers.cities);
-            if (app.layers.lvs) app.map.removeLayer(app.layers.lvs);
-            
-            if (!app.layers.states) {
-                app.layers.states = L.geoJSON(app.data.geoJsonStates, {
-                    style: (f) => {
-                        const stats = app.buildStats(MOCK_2022_STATES[f.properties.id] || {});
-                        const color = app.getIntensityColor(app.getCandColor(stats.winnerParty), stats.winnerPct);
-                        return { fillColor: color, color: '#1a1a24', weight: 1, fillOpacity: 0.85 };
-                    },
-                    onEachFeature: (f, layer) => {
-                        const ufId = f.properties.id;
-                        const ufName = f.properties.name;
-                        const stats = app.buildStats(MOCK_2022_STATES[ufId] || {});
-                        app.bindTooltip(layer, { title: ufName, subtitle: "Estado", isMun: false }, stats);
-                        
-                        layer.on('click', () => app.loadStateCities(ufId, ufName));
-                        layer.on('mouseover', (e) => { e.target.setStyle({weight: 2, color: '#fff'}); e.target.bringToFront(); });
-                        layer.on('mouseout', (e) => { app.layers.states.resetStyle(e.target); });
+        async loadUFData(uf) {
+            const loader = document.getElementById('loader');
+            loader.classList.remove('hidden');
+            document.getElementById('loaderText').textContent = `Carregando dados do estado...`;
+            try {
+                console.log(`Buscando dados da UF ${uf}...`);
+                const res = await fetch(`${API_BASE}/uf/${uf}`);
+                if (!res.ok) throw new Error(`Erro ao carregar UF ${uf}`);
+                this.data.ufData = await res.json();
+                console.log(`Dados recebidos: ${this.data.ufData.length} registros`);
+                if (this.data.ufData.length > 0) {
+                    console.log('Exemplo de registro:', this.data.ufData[0]);
+                }
+                this.aggregateUFData();
+            } catch (e) {
+                console.error(e);
+                alert('Falha ao carregar os dados do estado. Verifique o console.');
+                this.data.ufData = null;
+            }
+            loader.classList.add('hidden');
+        },
+
+        aggregateUFData() {
+            const turn = this.state.turn;
+            const cargo = this.state.role;
+            const aggMun = {};
+            const aggEst = {};
+
+            let contador = 0;
+            (this.data.ufData || []).forEach(item => {
+                // Garantir trim e comparação segura
+                const turno = String(item.turno || '').trim();
+                const dsCargo = String(item.DS_CARGO || '').trim();
+                if (turno !== turn || dsCargo !== cargo) return;
+
+                const parts = String(item.lv_id || '').split('_');
+                const codMun = parts[0];
+                if (!codMun) return;
+                const codUF = codMun.substring(0, 2);
+                const candName = String(item.NM_VOTAVEL || '').trim();
+                const party = this.extractParty(item);
+                const candKey = `${candName} (${party})`;
+                const votes = Number(item.QT_VOTOS) || 0;
+
+                if (!aggMun[codMun]) aggMun[codMun] = {};
+                aggMun[codMun][candKey] = (aggMun[codMun][candKey] || 0) + votes;
+
+                if (!aggEst[codUF]) aggEst[codUF] = {};
+                aggEst[codUF][candKey] = (aggEst[codUF][candKey] || 0) + votes;
+                contador++;
+            });
+
+            console.log(`Registros processados para ${cargo} turno ${turn}: ${contador}`);
+            console.log('Municípios agregados:', Object.keys(aggMun).length);
+            this.data.aggMunicipios = aggMun;
+            this.data.aggEstados = aggEst;
+        },
+
+        aggregateAndRefresh() {
+            if (this.data.ufData) this.aggregateUFData();
+            this.refreshMapStyle();
+            this.updateSidebar();
+        },
+
+        async loadBrazilLayer() {
+            const res = await fetch('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson');
+            const data = await res.json();
+            const ufMap = {'AC':'12','AL':'27','AM':'13','AP':'16','BA':'29','CE':'23','DF':'53','ES':'32','GO':'52','MA':'21','MG':'31','MS':'50','MT':'51','PA':'15','PB':'25','PE':'26','PI':'22','PR':'41','RJ':'33','RN':'24','RO':'11','RR':'14','RS':'43','SC':'42','SE':'28','SP':'35','TO':'17'};
+            data.features.forEach(f => f.properties.id = ufMap[f.properties.sigla]);
+
+            this.layers.brazil = L.geoJSON(data, {
+                smoothFactor: 0.5,
+                style: f => this.getStyle(f, 'estados'),
+                onEachFeature: (f, l) => {
+                    l.on('click', () => this.onStateClick(f.properties.id, f.properties.name));
+                    this.bindTooltip(l, f.properties.id, 'estados', f.properties.name);
+                }
+            }).addTo(this.map);
+        },
+
+        async onStateClick(ufId, ufName) {
+            await this.loadUFData(ufId);
+            this.selectRegion(ufId, ufName);
+            await this.loadStateMunicipalities(ufId, ufName);
+        },
+
+        async loadStateMunicipalities(ufId, ufName) {
+            const loader = document.getElementById('loader');
+            loader.classList.remove('hidden');
+            document.getElementById('loaderText').textContent = 'Carregando malha municipal...';
+            try {
+                if (!this.data.brasilMunicipiosGeoJSON) {
+                    const res = await fetch('https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json');
+                    this.data.brasilMunicipiosGeoJSON = await res.json();
+                }
+                const feats = this.data.brasilMunicipiosGeoJSON.features.filter(f => {
+                    const id = f.properties.id || f.properties.codarea;
+                    return id && id.toString().startsWith(ufId);
+                });
+
+                if (this.layers.cities) this.map.removeLayer(this.layers.cities);
+                if (this.layers.lv) this.map.removeLayer(this.layers.lv);
+                if (this.layers.brazil) this.map.removeLayer(this.layers.brazil);
+
+                this.layers.cities = L.geoJSON({ type: 'FeatureCollection', features: feats }, {
+                    smoothFactor: 0.3,
+                    style: f => this.getStyle(f, 'municipios'),
+                    onEachFeature: (f, l) => {
+                        const id = f.properties.id || f.properties.codarea;
+                        const name = f.properties.name || '';
+                        l.on('click', () => this.onMunicipalityClick(id, name));
+                        this.bindTooltip(l, id, 'municipios', name);
                     }
-                });
+                }).addTo(this.map);
+                this.map.fitBounds(this.layers.cities.getBounds());
+
+                document.getElementById('btnToggleLV').style.display = 'flex';
+                document.getElementById('btnToggleLVText').textContent = 'Ver Locais de Votação';
+                this.state.lvMode = false;
+            } catch (e) {
+                console.error(e);
             }
-            app.layers.states.addTo(app.map);
-            app.map.fitBounds(app.layers.states.getBounds());
-            
-            app.state.view = 'national';
-            app.updateBreadcrumbs();
-            
-            // Agrega dados nacionais
-            let natCand = {};
-            Object.values(MOCK_2022_STATES).forEach(st => {
-                Object.entries(st).forEach(([c, v]) => natCand[c] = (natCand[c]||0) + v);
+            loader.classList.add('hidden');
+        },
+
+        async onMunicipalityClick(munCode, munName) {
+            const uf = munCode.substring(0, 2);
+            await this.loadLVGeoJSON(uf);
+            const lvFeats = this.data.lvGeoJSON[uf].features.filter(f => {
+                const lvId = f.properties.lv_id || '';
+                return lvId.startsWith(munCode + '_');
             });
-            app.updateSidebarRight("Brasil", "Nacional", app.buildStats(natCand));
-
-        } catch (e) { console.error(e); } finally { app.hideLoader(); }
-    },
-
-    resetToNational: () => { app.loadNational(); },
-
-    // --- CARREGAMENTO ESTADUAL (MUNICÍPIOS) ---
-    loadStateCities: async (ufId, ufName) => {
-        app.showLoader(`Carregando Municípios de ${ufName}...`);
-        try {
-            if (!app.data.geoJsonCities) {
-                const res = await fetch("https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json");
-                app.data.geoJsonCities = await res.json();
+            if (lvFeats.length === 0) {
+                alert('Nenhum local de votação neste município.');
+                return;
             }
+            this.displayLVLayer(lvFeats, munName, munCode);
+        },
 
-            const stateFeatures = app.data.geoJsonCities.features.filter(f => {
-                const cod = f.properties.id || f.properties.codarea;
-                return cod && cod.toString().startsWith(ufId);
-            });
+        async loadLVGeoJSON(uf) {
+            if (this.data.lvGeoJSON[uf]) return;
+            const loader = document.getElementById('loader');
+            loader.classList.remove('hidden');
+            document.getElementById('loaderText').textContent = 'Carregando malha de locais de votação...';
+            try {
+                const res = await fetch(`https://huggingface.co/datasets/octoz/dataLV/resolve/main/lv_${uf}.geojson`);
+                if (!res.ok) throw new Error(`Arquivo lv_${uf}.geojson não encontrado`);
+                this.data.lvGeoJSON[uf] = await res.json();
+                console.log(`Malha de LVs carregada para UF ${uf}: ${this.data.lvGeoJSON[uf].features.length} features`);
+            } catch (e) {
+                alert(e.message);
+            }
+            loader.classList.add('hidden');
+        },
 
-            if (app.layers.states) app.map.removeLayer(app.layers.states);
-            if (app.layers.lvs) app.map.removeLayer(app.layers.lvs);
-            if (app.layers.cities) app.map.removeLayer(app.layers.cities);
+        displayLVLayer(features, regionName, regionId) {
+            if (this.layers.cities) this.map.removeLayer(this.layers.cities);
+            if (this.layers.lv) this.map.removeLayer(this.layers.lv);
+            if (this.layers.brazil) this.map.removeLayer(this.layers.brazil);
 
-            app.layers.cities = L.geoJSON({ type: "FeatureCollection", features: stateFeatures }, {
-                style: (f) => {
-                    const munId = f.properties.id || f.properties.codarea;
-                    const stats = app.getMunMockStats(ufId, munId);
-                    const color = app.getIntensityColor(app.getCandColor(stats.winnerParty), stats.winnerPct);
-                    return { fillColor: color, color: '#1a1a24', weight: 0.5, fillOpacity: 0.9 };
-                },
-                onEachFeature: (f, layer) => {
-                    const munId = f.properties.id || f.properties.codarea;
-                    const munName = f.properties.name;
-                    const stats = app.getMunMockStats(ufId, munId);
-                    app.bindTooltip(layer, { title: munName, subtitle: "Município", isMun: true }, stats);
-                    
-                    layer.on('click', (e) => {
-                        L.DomEvent.stopPropagation(e);
-                        app.loadMunicipalityLV(munId, munName, f);
-                    });
-                    layer.on('mouseover', (e) => { e.target.setStyle({weight: 2, color: '#fff'}); e.target.bringToFront(); });
-                    layer.on('mouseout', (e) => { app.layers.cities.resetStyle(e.target); });
+            this.layers.lv = L.geoJSON({ type: 'FeatureCollection', features }, {
+                smoothFactor: 0.2,
+                style: f => this.getLVStyle(f),
+                onEachFeature: (f, l) => {
+                    const lvId = f.properties.lv_id || '';
+                    l.on('click', () => this.selectRegion(lvId, f.properties.nm_locvot || 'Local'));
+                    this.bindLVTooltip(l, lvId);
                 }
-            }).addTo(app.map);
-            
-            app.map.fitBounds(app.layers.cities.getBounds());
-            
-            app.state.view = 'cities';
-            app.state.selectedUFId = ufId;
-            app.state.selectedUFName = ufName;
-            app.updateBreadcrumbs();
-            app.updateSidebarRight(ufName, "Estadual", app.buildStats(MOCK_2022_STATES[ufId] || {}));
+            }).addTo(this.map);
+            this.map.fitBounds(this.layers.lv.getBounds());
+            this.selectRegion(regionId, regionName);
+        },
 
-        } catch (e) { console.error(e); } finally { app.hideLoader(); }
-    },
-
-    getMunMockStats: (ufId, munId) => {
-        if(app.data.mockMun[munId]) return app.data.mockMun[munId];
-        
-        const ufData = MOCK_2022_STATES[ufId];
-        const c1 = "LUIZ INÁCIO LULA DA SILVA (PT)", c2 = "JAIR BOLSONARO (PL)";
-        const lulaPctUF = ufData[c1] / (ufData[c1] + ufData[c2]);
-        
-        let noise = (Math.random() * 0.5) - 0.25; // Random variance for visual depth
-        let lulaPctMun = Math.max(0.1, Math.min(0.9, lulaPctUF + noise));
-        
-        const total = Math.floor(Math.random() * 80000) + 2000;
-        let cands = {};
-        cands[c1] = Math.floor(total * lulaPctMun);
-        cands[c2] = Math.floor(total * (1 - lulaPctMun));
-        
-        const stats = app.buildStats(cands);
-        app.data.mockMun[munId] = stats;
-        return stats;
-    },
-
-    // --- CARREGAMENTO MUNICIPAL (LOCAIS DE VOTAÇÃO - API) ---
-    loadMunicipalityLV: async (munId, munName, munFeature) => {
-        app.showLoader(`Buscando Locais de Votação (LVs) para ${munName}...`);
-        
-        try {
-            // 1. TENTA FETCH NA API REAL
-            const geoRes = await fetch(API_CONFIG.getGeoJsonUrl(munId)).catch(()=>({ok:false}));
-            const votesRes = await fetch(API_CONFIG.getVotesUrl(munId)).catch(()=>({ok:false}));
-            
-            let geojson, votes;
-
-            if (geoRes.ok && votesRes.ok) {
-                geojson = await geoRes.json();
-                votes = await votesRes.json();
+        toggleLVMode() {
+            if (!this.state.selectedId || this.state.selectedId.length !== 2) return;
+            const uf = this.state.selectedId;
+            if (this.state.lvMode) {
+                this.loadStateMunicipalities(uf, this.state.selectedName);
             } else {
-                // 2. SE A API FALHAR (Como não temos o endpoint vivo), GERA O MOCK BASEADO NO POLÍGONO!
-                console.warn(`API Inacessível para ${munId}. Gerando malha MOCK em alta resolução via Turf.js para demonstração.`);
-                const mockData = app.generateTurfMockLV(munFeature, munId, munName);
-                geojson = mockData.geojson;
-                votes = mockData.votes;
+                this.loadStateLVs(uf, this.state.selectedName);
+                this.state.lvMode = true;
+                document.getElementById('btnToggleLVText').textContent = 'Ver Municípios';
             }
+        },
 
-            app.renderLVs(geojson, votes, munName, munId);
+        async loadStateLVs(ufId, ufName) {
+            await this.loadUFData(ufId);
+            this.aggregateUFData();
+            await this.loadLVGeoJSON(ufId);
+            this.displayLVLayer(this.data.lvGeoJSON[ufId].features, ufName, ufId);
+            this.state.lvMode = true;
+        },
 
-        } catch(e) {
-            console.error("Erro fatal ao carregar LVs", e);
-            alert("Erro ao processar dados de LV.");
-        } finally {
-            app.hideLoader();
-        }
-    },
+        // ---------- ESTILOS ----------
+        getStyle(feature, scope) {
+            const id = feature.properties.id || feature.properties.codarea;
+            const votes = scope === 'estados' ? this.data.aggEstados[id] : this.data.aggMunicipios[id];
+            const stats = this.recalcStats(votes || {});
+            if (!stats || !stats.winner) return { fillColor: '#222', weight: 0.2, color: '#ffffff', fillOpacity: 1 };
+            const party = stats.winner.split(' (')[1]?.replace(')','') || 'DEFAULT';
+            const color = this.getDiscreteColor(this.getCandColor(party), stats.pct);
+            return {
+                fillColor: color,
+                weight: scope === 'estados' ? 0.6 : 0.2,
+                color: '#ffffff',
+                fillOpacity: 1,
+                lineJoin: 'round',
+                lineCap: 'round'
+            };
+        },
 
-    // Geração de Mocks de LV usando Turf.js HexGrid intersectando o polígono do Município
-    generateTurfMockLV: (feature, munCode, munName) => {
-        let intersectedFeatures =[];
-        let lvIndex = 1;
-        
-        try {
-            const bbox = turf.bbox(feature);
-            // Cria um grid hexagonal pequeno (2km) sobre a área (Representa Setores Censitários)
-            const hexGrid = turf.hexGrid(bbox, 2, {units: 'kilometers'});
-            
-            turf.featureEach(hexGrid, function (hex) {
-                const intersection = turf.intersect(feature, hex);
-                if (intersection) {
-                    intersection.properties = {
-                        lv_id: `${munCode}_mock_${lvIndex}`,
-                        CD_MUN: munCode, NM_MUN: munName,
-                        nm_locvot: `Escola Estadual Central ${lvIndex}`,
-                        ds_enderec: `Rua das Flores, Quadra ${lvIndex} - Bairro Centro`,
-                        CD_SETOR: `setor_${lvIndex}`
-                    };
-                    intersectedFeatures.push(intersection);
-                    lvIndex++;
+        getLVStyle(feature) {
+            const lvId = feature.properties.lv_id || '';
+            const votes = this.getLVRawVotes(lvId);
+            const stats = this.recalcStats(votes);
+            if (!stats || !stats.winner) return { fillColor: '#222', weight: 0.2, color: '#ffffff', fillOpacity: 1 };
+            const party = stats.winner.split(' (')[1]?.replace(')','') || 'DEFAULT';
+            const color = this.getDiscreteColor(this.getCandColor(party), stats.pct);
+            return {
+                fillColor: color,
+                weight: 0.2,
+                color: '#ffffff',
+                fillOpacity: 1,
+                lineJoin: 'round',
+                lineCap: 'round'
+            };
+        },
+
+        getLVRawVotes(lvId) {
+            const votes = {};
+            (this.data.ufData || []).forEach(item => {
+                if (String(item.turno || '').trim() === this.state.turn &&
+                    String(item.DS_CARGO || '').trim() === this.state.role &&
+                    String(item.lv_id || '').trim() === lvId) {
+                    const candKey = `${item.NM_VOTAVEL} (${this.extractParty(item)})`;
+                    votes[candKey] = (votes[candKey] || 0) + (Number(item.QT_VOTOS) || 0);
                 }
             });
-        } catch(e) { console.error("Turf falhou, usando polígono base."); }
+            return votes;
+        },
 
-        if (intersectedFeatures.length === 0) {
-            // Fallback de emergência se Turf falhar na topologia
-            const fb = JSON.parse(JSON.stringify(feature));
-            fb.properties = { lv_id: `${munCode}_1`, nm_locvot: "Sede Municipal Principal" };
-            intersectedFeatures.push(fb);
-        }
+        extractParty(item) {
+            const num = String(item.NR_VOTAVEL || '').trim();
+            const mapNum = {'13':'PT','22':'PL','12':'PDT','45':'PSDB','15':'MDB','55':'PSD','50':'PSOL','11':'PP','10':'REPUBLICANOS','14':'PTB','43':'PV','23':'CIDADANIA','40':'PSB','65':'PCdoB','30':'NOVO','77':'SOLIDARIEDADE','28':'PRTB','51':'PATRIOTA','35':'PMB','44':'PRP','18':'REDE','70':'AVANTE','80':'UP','90':'PROS','19':'PODE','27':'DC','36':'AGIR','29':'PCO','16':'PSTU','21':'PCB'};
+            return mapNum[num] || 'OUTROS';
+        },
 
-        const geojson = turf.featureCollection(intersectedFeatures);
-        const votesData =[];
-        
-        // Viés base do município para manter consistência visual com a camada anterior
-        const munBaseStats = app.getMunMockStats(app.state.selectedUFId, munCode);
-        const baseWinner = munBaseStats.winner;
-
-        intersectedFeatures.forEach(f => {
-            const total = Math.floor(Math.random() * 2000) + 300;
-            const bias = (Math.random() * 0.4) + 0.4; // 40 a 80%
-            
-            let v1, v2;
-            if (baseWinner.includes("LULA")) { v1 = Math.floor(total * bias); v2 = total - v1; } 
-            else { v2 = Math.floor(total * bias); v1 = total - v2; }
-
-            const baseRow = { lv_id: f.properties.lv_id, CD_CARGO: "1", DS_CARGO: "PRESIDENTE", turno: "2" };
-            votesData.push({ ...baseRow, NR_VOTAVEL: "13", NM_VOTAVEL: "LUIZ INÁCIO LULA DA SILVA", QT_VOTOS: v1 });
-            votesData.push({ ...baseRow, NR_VOTAVEL: "22", NM_VOTAVEL: "JAIR BOLSONARO", QT_VOTOS: v2 });
-        });
-
-        return { geojson, votes: votesData };
-    },
-
-    renderLVs: (geojson, votesArray, munName, munId) => {
-        if (app.layers.cities) app.map.removeLayer(app.layers.cities);
-        if (app.layers.lvs) app.map.removeLayer(app.layers.lvs);
-
-        // Agrupa JSON plano por lv_id
-        const byLV = {};
-        votesArray.forEach(row => {
-            if(!byLV[row.lv_id]) byLV[row.lv_id] = {};
-            const party = app.getPartyByNumber(row.NR_VOTAVEL);
-            const key = `${row.NM_VOTAVEL} (${party})`;
-            byLV[row.lv_id][key] = (byLV[row.lv_id][key] || 0) + row.QT_VOTOS;
-        });
-
-        // Transforma em objetos Stats
-        const statsByLV = {};
-        let munAggCand = {};
-        Object.keys(byLV).forEach(lvId => {
-            statsByLV[lvId] = app.buildStats(byLV[lvId]);
-            Object.entries(byLV[lvId]).forEach(([c, v]) => munAggCand[c] = (munAggCand[c]||0) + v);
-        });
-        const munAggStats = app.buildStats(munAggCand);
-
-        app.layers.lvs = L.geoJSON(geojson, {
-            style: (f) => {
-                const stats = statsByLV[f.properties.lv_id];
-                if (!stats || !stats.winner) return { fillColor: '#333', color: '#555', weight: 1, fillOpacity: 0.6 };
-                
-                const color = app.getIntensityColor(app.getCandColor(stats.winnerParty), stats.winnerPct);
-                return { fillColor: color, color: '#1a1a24', weight: 1, fillOpacity: 0.85 };
-            },
-            onEachFeature: (f, layer) => {
-                const lvId = f.properties.lv_id;
-                const stats = statsByLV[lvId] || app.buildStats({});
-                const props = f.properties;
-                
-                app.bindTooltip(layer, { 
-                    title: props.nm_locvot || "Local Desconhecido", 
-                    subtitle: "Local de Votação",
-                    address: props.ds_enderec || props.NM_BAIRRO || `Setor: ${props.CD_SETOR}`,
-                    isMun: false 
-                }, stats);
-                
-                layer.on('click', (e) => {
-                    L.DomEvent.stopPropagation(e);
-                    app.updateSidebarRight(props.nm_locvot, "Local de Votação", stats);
-                });
-                
-                layer.on('mouseover', (e) => { e.target.setStyle({weight: 3, color: '#fff'}); e.target.bringToFront(); });
-                layer.on('mouseout', (e) => { app.layers.lvs.resetStyle(e.target); });
+        getGradientConfig(pct) {
+            for (let i = GRADIENT_SCHEME.length-1; i >= 0; i--) {
+                if (pct >= GRADIENT_SCHEME[i].min) return GRADIENT_SCHEME[i];
             }
-        }).addTo(app.map);
-        
-        // Se clicar fora dos LVs, volta pro total do município
-        app.map.on('click', () => { if(app.state.view === 'lv') app.updateSidebarRight(munName, "Município (Agregado)", munAggStats); });
-        
-        app.map.fitBounds(app.layers.lvs.getBounds(), { padding: [40, 40] });
-        app.state.view = 'lv';
-        app.state.selectedMunId = munId;
-        app.state.selectedMunName = munName;
-        app.updateBreadcrumbs();
-        app.updateSidebarRight(munName, "Município (Agregado)", munAggStats);
-    },
+            return GRADIENT_SCHEME[0];
+        },
 
-    // --- SIDEBAR E TOOLTIPS ---
-    toTitleCase: (str) => {
-        return str.toLowerCase().replace(/(?:^|\s)\w/g, m => m.toUpperCase());
-    },
+        getDiscreteColor(hex, pct) {
+            const cfg = this.getGradientConfig(pct);
+            return this.mixColor(hex, cfg.mix, cfg.ratio);
+        },
 
-    updateSidebarRight: (title, type, stats) => {
-        document.getElementById('regionName').textContent = title;
-        document.getElementById('regionType').textContent = type;
-        document.getElementById('totalVotesVal').textContent = stats.total.toLocaleString('pt-BR');
+        mixColor(hex1, hex2, amount) {
+            const c1 = this.hexToRgb(hex1);
+            const c2 = this.hexToRgb(hex2);
+            const r = Math.round(c1.r + (c2.r - c1.r) * amount);
+            const g = Math.round(c1.g + (c2.g - c1.g) * amount);
+            const bl = Math.round(c1.b + (c2.b - c1.b) * amount);
+            return `rgb(${r},${g},${bl})`;
+        },
 
-        const container = document.getElementById('resultsContainer');
-        container.innerHTML = '';
+        hexToRgb(hex) {
+            let h = hex.substring(1);
+            if (h.length === 3) h = h.split('').map(x => x + x).join('');
+            const n = parseInt(h, 16);
+            return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+        },
 
-        const rank = Object.entries(stats.candidates)
-            .map(([cand, votes]) => ({ cand, votes, pct: stats.total > 0 ? (votes/stats.total)*100 : 0 }))
-            .sort((a,b) => b.votes - a.votes);
+        getCandColor(party) {
+            return this.state.customColors[party] || PARTY_COLORS[party] || PARTY_COLORS.DEFAULT;
+        },
 
-        rank.forEach(r => {
-            const party = app.getPartyFromName(r.cand);
-            const cleanName = app.toTitleCase(r.cand.replace(/\s*\(.*?\)/, ''));
-            const color = app.getCandColor(party);
+        recalcStats(votes) {
+            let total = 0,
+                max = -1,
+                winner = null;
+            const rank = [];
 
-            const div = document.createElement('div');
-            div.className = `cand-row`;
-            div.innerHTML = `
-                <div class="cand-color" style="background:${color}"></div>
-                <div class="cand-info">
-                    <div class="cand-head">
-                        <span class="name" title="${cleanName}">${cleanName}</span>
-                        <span class="pct" style="color:${color};">${r.pct.toFixed(2)}%</span>
+            Object.entries(votes).forEach(([cand, votos]) => {
+                if (!this.state.ignored.has(cand)) {
+                    total += votos;
+                    if (votos > max) { max = votos; winner = cand; }
+                    rank.push({ cand, votes: votos, pct: 0 });
+                } else {
+                    rank.push({ cand, votes: 0, pct: 0, ignored: true, orig: votos });
+                }
+            });
+
+            if (total === 0 && rank.filter(r => !r.ignored).length === 0) return null;
+
+            rank.forEach(r => {
+                if (!r.ignored) r.pct = (r.votes / total) * 100;
+            });
+
+            rank.sort((a, b) => (b.ignored ? -1 : b.votes) - (a.ignored ? -1 : a.votes));
+
+            return {
+                total,
+                winner,
+                pct: winner ? (max / total) * 100 : 0,
+                ranking: rank
+            };
+        },
+
+        // ---------- SELEÇÃO E SIDEBAR ----------
+        selectRegion(id, name) {
+            this.state.selectedId = id;
+            this.state.selectedName = name;
+            document.getElementById('btnBack').style.display = 'flex';
+            if (id.length === 2 && !this.state.lvMode) {
+                document.getElementById('btnToggleLV').style.display = 'flex';
+                document.getElementById('btnToggleLVText').textContent = 'Ver Locais de Votação';
+            } else {
+                document.getElementById('btnToggleLV').style.display = 'none';
+            }
+            this.updateSidebar();
+        },
+
+        resetSelection() {
+            this.state.selectedId = null;
+            this.state.selectedName = "Brasil";
+            document.getElementById('btnBack').style.display = 'none';
+            document.getElementById('btnToggleLV').style.display = 'none';
+            if (this.layers.cities) this.map.removeLayer(this.layers.cities);
+            if (this.layers.lv) this.map.removeLayer(this.layers.lv);
+            this.layers.brazil.addTo(this.map);
+            this.map.setView([-15, -50], 4);
+            this.updateSidebar();
+        },
+
+        updateSidebar() {
+            const titleEl = document.getElementById('regionName');
+            const totalEl = document.getElementById('totalVotesVal');
+            const container = document.getElementById('resultsContainer');
+            titleEl.textContent = this.state.selectedName;
+            container.innerHTML = '';
+
+            let rawVotes = {};
+            if (!this.state.selectedId) {
+                Object.values(this.data.aggEstados).forEach(st =>
+                    Object.entries(st).forEach(([c, v]) => rawVotes[c] = (rawVotes[c] || 0) + v)
+                );
+            } else if (this.state.selectedId.length === 2) {
+                rawVotes = this.data.aggEstados[this.state.selectedId] || {};
+            } else {
+                rawVotes = this.getLVRawVotes(this.state.selectedId);
+            }
+
+            const stats = this.recalcStats(rawVotes);
+            if (!stats) {
+                totalEl.textContent = '0';
+                container.innerHTML = '<div style="color:#666;text-align:center;">Sem dados para esta seleção</div>';
+                return;
+            }
+            totalEl.textContent = stats.total.toLocaleString('pt-BR');
+
+            stats.ranking.forEach(r => {
+                const name = r.cand.split(' (')[0];
+                const party = r.cand.split(' (')[1]?.replace(')', '') || 'DEFAULT';
+                const color = this.getCandColor(party);
+                const isIgnored = r.ignored;
+
+                const div = document.createElement('div');
+                div.className = `cand-row ${isIgnored ? 'disabled' : ''}`;
+                div.innerHTML = `
+                    <div class="cand-check ${isIgnored ? '' : 'checked'}"></div>
+                    <div class="cand-color" style="background:${color}"></div>
+                    <div class="cand-info">
+                        <div class="cand-head">
+                            <span>${name}</span>
+                            <span style="color:${color}">${isIgnored ? '--' : r.pct.toFixed(2) + '%'}</span>
+                        </div>
+                        <div class="cand-sub">
+                            <span>${party}</span>
+                            <span>${isIgnored ? (r.orig || 0).toLocaleString() : r.votes.toLocaleString()}</span>
+                        </div>
+                        ${!isIgnored ? `<div class="progress-bar"><div class="progress-fill" style="width:${r.pct}%; background:${color}"></div></div>` : ''}
                     </div>
-                    <div class="cand-sub">
-                        <span>${party}</span>
-                        <span>${r.votes.toLocaleString('pt-BR')} votos</span>
+                `;
+
+                div.querySelector('.cand-check').onclick = () => {
+                    if (this.state.ignored.has(r.cand)) this.state.ignored.delete(r.cand);
+                    else this.state.ignored.add(r.cand);
+                    this.refreshMapStyle();
+                    this.updateSidebar();
+                };
+
+                div.querySelector('.cand-color').onclick = e => {
+                    e.stopPropagation();
+                    this.openColorPicker(party, color, e.target);
+                };
+
+                container.appendChild(div);
+            });
+        },
+
+        refreshMapStyle() {
+            if (this.layers.brazil) this.layers.brazil.setStyle(f => this.getStyle(f, 'estados'));
+            if (this.layers.cities) this.layers.cities.setStyle(f => this.getStyle(f, 'municipios'));
+            if (this.layers.lv) this.layers.lv.setStyle(f => this.getLVStyle(f));
+        },
+
+        openColorPicker(party, defColor, el) {
+            const pickr = Pickr.create({
+                el,
+                theme: 'nano',
+                default: defColor,
+                swatches: Object.values(PARTY_COLORS).slice(0, 8),
+                components: { preview: true, hue: true, interaction: { save: true } }
+            });
+            pickr.on('save', color => {
+                this.state.customColors[party] = color.toHEXA().toString();
+                localStorage.setItem('v2022_colors', JSON.stringify(this.state.customColors));
+                el.style.background = color.toHEXA().toString();
+                this.refreshMapStyle();
+                this.updateSidebar();
+                pickr.destroyAndRemove();
+            });
+        },
+
+        bindTooltip(layer, id, scope, name) {
+            layer.bindTooltip(() => {
+                const votes = scope === 'estados' ? this.data.aggEstados[id] : this.data.aggMunicipios[id];
+                const stats = this.recalcStats(votes || {});
+                if (!stats) return `<div class="custom-tooltip"><div class="tt-head">${name || id}</div><div class="tt-body">Sem dados</div></div>`;
+                const wName = stats.winner.split(' (')[0];
+                const party = stats.winner.split(' (')[1]?.replace(')', '') || '';
+                const color = this.getCandColor(party);
+                return `<div class="custom-tooltip">
+                    <div class="tt-head">${name || id}</div>
+                    <div class="tt-body">
+                        <div style="color:${color}; font-weight:800;">${wName} – ${stats.pct.toFixed(1)}%</div>
+                        <div style="font-size:0.8rem;">${stats.total.toLocaleString()} votos</div>
                     </div>
-                    <div class="progress-bar"><div class="progress-fill" style="width:${r.pct}%; background:${color}"></div></div>
-                </div>
-            `;
-            container.appendChild(div);
-        });
-        
-        if (rank.length === 0) {
-            container.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:20px;">Nenhum dado de voto encontrado.</div>';
+                </div>`;
+            }, { sticky: true, direction: 'top' });
+        },
+
+        bindLVTooltip(layer, lvId) {
+            layer.bindTooltip(() => {
+                const votes = this.getLVRawVotes(lvId);
+                const stats = this.recalcStats(votes);
+                if (!stats) return '<div class="custom-tooltip">Sem dados</div>';
+                const wName = stats.winner.split(' (')[0];
+                const party = stats.winner.split(' (')[1]?.replace(')', '') || '';
+                const color = this.getCandColor(party);
+                return `<div class="custom-tooltip">
+                    <div class="tt-head">Local de Votação</div>
+                    <div class="tt-body">
+                        <div style="color:${color}; font-weight:800;">${wName} – ${stats.pct.toFixed(1)}%</div>
+                        <div style="font-size:0.8rem;">${stats.total.toLocaleString()} votos</div>
+                    </div>
+                </div>`;
+            }, { sticky: true, direction: 'top' });
+        },
+
+        refreshMap() {
+            if (this.state.selectedId && this.state.selectedId.length === 2) {
+                this.onStateClick(this.state.selectedId, this.state.selectedName);
+            } else {
+                this.resetSelection();
+            }
         }
-    },
+    };
 
-    bindTooltip: (layer, info, stats) => {
-        const winnerColor = stats.winner ? app.getCandColor(stats.winnerParty) : '#888';
-        const winnerName = stats.winner ? app.toTitleCase(stats.winner.replace(/\s*\(.*?\)/, '')) : 'Sem Dados';
-        const winnerPct = stats.winnerPct > 0 ? (stats.winnerPct * 100).toFixed(1) + '%' : '-';
-        
-        let addressHtml = '';
-        if (info.address) {
-            addressHtml = `<div class="tooltip-address"><i class="fas fa-map-marker-alt"></i> ${info.address}</div>`;
-        }
-
-        const popupContent = `
-            <div class="tooltip-container">
-                <div class="tooltip-label">${info.subtitle}</div>
-                <div class="tooltip-title">${info.title}</div>
-                ${addressHtml}
-                <div class="tooltip-divider"></div>
-                <div class="tooltip-row">
-                    <span class="cand-name">1º ${winnerName}</span>
-                    <span class="cand-pct" style="color:${winnerColor};">${winnerPct}</span>
-                </div>
-                <div class="tooltip-footer">
-                    Total: ${stats.total.toLocaleString('pt-BR')} válidos
-                </div>
-            </div>
-        `;
-
-        layer.bindTooltip(popupContent, {
-            sticky: true,
-            className: 'custom-leaflet-tooltip',
-            direction: 'top',
-            offset: [0, -10]
-        });
+    window.app = app;
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    } else {
+        app.init();
     }
-};
-
-// Iniciar app quando a DOM estiver pronta
-document.addEventListener('DOMContentLoaded', app.init);
+})();
 </script>
 </body>
 </html>
