@@ -5,4 +5,7 @@ track filter=lfs diff=lfs merge=lfs -text
 caminho/do/meu/video_pesado.mp4 filter=lfs diff=lfs merge=lfs -text
 git filter=lfs diff=lfs merge=lfs -text
 *.geojson filter=lfs diff=lfs merge=lfs -text
+data/estados/lv_poligonos_SC.zip filter=lfs diff=lfs merge=lfs -text
+data/estados/lv_poligonos_BA.zip filter=lfs diff=lfs merge=lfs -text
+data/estados/lv_poligonos_MG.zip filter=lfs diff=lfs merge=lfs -text
 estados_mun/*.geojson !text !filter !merge !diff
