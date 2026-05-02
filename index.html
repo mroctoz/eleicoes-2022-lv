@@ -405,7 +405,7 @@ const app = {
             if (!app.data.lvCache[ufCode]) {
                 const ufSigla = IBGE_TO_UF[ufCode];
 if (!ufSigla) throw new Error("UF não encontrada para código " + ufCode);
-const resp = await fetch(`data/estados/${ufSigla}.geojson`);
+const resp = await fetch(`estados_mun/${munCode}.geojson`);
                 if (!resp.ok) throw new Error("Arquivo de LV não encontrado para " + ufCode);
                 const json = await resp.json();
                 app.data.lvCache[ufCode] = json;
