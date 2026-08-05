@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Eleições View 2026 - Simulador Político Cartográfico</title>
+<title>Eleições View 2026 - Simulador Político & Locais de Votação</title>
 
 <!-- Leaflet Mapa -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- Proj4js (reprojeção EPSG:5880 → WGS84) -->
+<!-- Proj4js (Reprojeção EPSG:5880 → WGS84) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
 
 <!-- Fonts & Icons -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+<!-- Color Picker (Pickr) -->
+<link href="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/themes/nano.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr/dist/pickr.min.js"></script>
 
 <!-- Export Libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -470,10 +474,40 @@
         margin-bottom: 8px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         transition: all 0.2s ease;
     }
     .cand-row:hover { background: var(--card-hover); }
+    .cand-row.disabled { opacity: 0.4; }
+    .cand-check {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 2px solid var(--text-muted);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .cand-check.checked {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+    }
+    .cand-check.checked::after {
+        content: '✓';
+        color: #fff;
+        font-size: 10px;
+        font-weight: 900;
+    }
+    .cand-color-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        cursor: pointer;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
+    }
     .cand-info { flex: 1; }
     .cand-head {
         display: flex;
@@ -688,7 +722,7 @@
 </div>
 
 <div id="app">
-    <!-- BARRA LATERAL ESQUERDA (PAINEL DE CONFIGURAÇÃO COM SCROLL PERFECT) -->
+    <!-- BARRA LATERAL ESQUERDA (PAINEL DE CONFIGURAÇÃO) -->
     <aside class="sidebar" id="sidebarConfig">
         <div class="header">
             <div class="brand-title">
@@ -850,7 +884,7 @@
 </div>
 
 <script>
-// --- DEFINIÇÃO DE PROJEÇÃO CARTOGRÁFICA EPSG:5880 (SIRGAS 2000 / BRAZIL POLYCONIC) ---
+// DEFINIÇÃO DO PROJ4 PARA SIRGAS 2000 (EPSG:5880) -> WGS84 (EPSG:4326)
 proj4.defs("EPSG:5880", "+proj=poly +lat_0=0 +lon_0=-54 +x_0=5000000 +y_0=10000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 
 // --- ESTADOS DO BRASIL ---
@@ -866,7 +900,7 @@ const STATES = [
     {sigla:'SP', nome:'São Paulo', id:'35'}, {sigla:'SE', nome:'Sergipe', id:'28'}, {sigla:'TO', nome:'Tocantins', id:'17'}
 ];
 
-// --- LISTA COMPLETA DOS CANDIDATOS DE 2022 PARA HERANÇA ---
+// --- CANDIDATOS DE 2022 (MATRIZ DE HERANÇA) ---
 const SOURCES_2022 = [
     { id: 'LULA', name: 'Lula (PT)' },
     { id: 'JAIR', name: 'Jair Bolsonaro (PL)' },
@@ -881,7 +915,6 @@ const SOURCES_2022 = [
     { id: 'EYMAEL', name: 'Constituinte Eymael (DC)' }
 ];
 
-// ALIAS PARA MAPEAR CHAVES DO BANCO DE DADOS 2022 DE FORMA COMPLETA
 const CAND_2022_ALIASES = {
     'LULA': ['LULA', '13', 'PT'],
     'JAIR': ['JAIR', 'BOLSONARO', '22', 'PL'],
@@ -891,24 +924,17 @@ const CAND_2022_ALIASES = {
     'FELLIPE': ['FELLIPE', 'DAVILA', '30', 'NOVO'],
     'KELMON': ['KELMON', 'PADRE', '14', 'PTB'],
     'SOFIA': ['SOFIA', 'MANZANO', '21', 'PCB'],
-    'PERICLES': ['PERICLES', 'PERICLES', '80', 'UP'],
+    'PERICLES': ['PERICLES', '80', 'UP'],
     'VERA': ['VERA', '16', 'PSTU'],
     'EYMAEL': ['EYMAEL', 'CONSTITUINTE', '27', 'DC']
 };
 
 // --- FOTOS DOS CANDIDATOS (LOCAIS COM FALLBACK ONLINE) ---
 const LOCAL_PHOTOS = {
-    'LULA': 'data/lula.jpg',
-    'FLAVIO': 'data/flavio.jpg',
-    'RENAN': 'data/renan.jpg',
-    'CAIADO': 'data/caiado.jpg',
-    'ZEMA': 'data/zema.jpg',
-    'AÉCIO': 'data/aecio.jpg',
-    'JOAQUIM': 'data/joaquim.jpg',
-    'ALDO': 'data/aldo.jpg',
-    'DACIOLO': 'data/daciolo.jpg',
-    'CURY': 'data/cury.jpg',
-    'OUTROS': 'data/outros.jpg'
+    'LULA': 'data/lula.jpg', 'FLAVIO': 'data/flavio.jpg', 'RENAN': 'data/renan.jpg',
+    'CAIADO': 'data/caiado.jpg', 'ZEMA': 'data/zema.jpg', 'AÉCIO': 'data/aecio.jpg',
+    'JOAQUIM': 'data/joaquim.jpg', 'ALDO': 'data/aldo.jpg', 'DACIOLO': 'data/daciolo.jpg',
+    'CURY': 'data/cury.jpg', 'OUTROS': 'data/outros.jpg'
 };
 
 const REMOTE_PHOTOS = {
@@ -925,21 +951,13 @@ const REMOTE_PHOTOS = {
     'OUTROS': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Portrait_Placeholder.png/400px-Portrait_Placeholder.png'
 };
 
-// --- LOGOS DOS PARTIDOS ---
 const PARTY_LOGOS = {
-    'PT': 'data/PT.jpg',
-    'PL': 'data/PL.jpg',
-    'PSD': 'data/PSD.jpg',
-    'MISSÃO': 'data/MISSÃO.jpg',
-    'NOVO': 'data/NOVO.jpg',
-    'PSDB': 'data/PSDB.jpg',
-    'DC': 'data/DC.jpg',
-    'MOBILIZA': 'data/MOBILIZA.jpg',
-    'AVANTE': 'data/AVANTE.jpg',
-    'OUTROS': 'data/OUTROS.jpg'
+    'PT': 'data/PT.jpg', 'PL': 'data/PL.jpg', 'PSD': 'data/PSD.jpg', 'MISSÃO': 'data/MISSÃO.jpg',
+    'NOVO': 'data/NOVO.jpg', 'PSDB': 'data/PSDB.jpg', 'DC': 'data/DC.jpg', 'MOBILIZA': 'data/MOBILIZA.jpg',
+    'AVANTE': 'data/AVANTE.jpg', 'OUTROS': 'data/OUTROS.jpg'
 };
 
-// --- CONFIGURAÇÃO DOS CANDIDATOS E TABELA DE COR EM 5% ---
+// --- CONFIGURAÇÃO DOS CANDIDATOS E SCHEME 5% ---
 const CONFIG = {
     candidates: [
         { id: 'LULA', name: 'Lula', party: 'PT', color: '#de0000' },
@@ -954,7 +972,6 @@ const CONFIG = {
         { id: 'CURY', name: 'Augusto Cury', party: 'AVANTE', color: '#2EBF98' },
         { id: 'OUTROS', name: 'Outros', party: 'OUTROS', color: '#8b5cf6' }
     ],
-    // TABELA DE DEGRADÊ REFORMULADA (5% EM 5% COM ALTO CONTRASTE PERCEPTÍVEL)
     scheme: [
         { min: 0,   mix: '#ffffff', ratio: 0.88, ref: '#F5F5F5' },
         { min: 20,  mix: '#ffffff', ratio: 0.82, ref: '#E6E6E6' },
@@ -1016,52 +1033,17 @@ const PRESETS = {
     }
 };
 
-// --- MODELO DEFAULT COM MATRIZ COMPLETA PARA TODOS OS CANDIDATOS DE 2022 ---
 const DEFAULT_SCENARIO = {
-  "t1_polls": {
-    "LULA": 45.82,
-    "FLAVIO": 36.53,
-    "RENAN": 7.96,
-    "CAIADO": 3.16,
-    "ZEMA": 2.86,
-    "ALDO": 0,
-    "CURY": 1.63,
-    "JOAQUIM": 0,
-    "AÉCIO": 0,
-    "OUTROS": 2.04,
-    "DACIOLO": 0
-  },
+  "t1_polls": { "LULA": 45.82, "FLAVIO": 36.53, "RENAN": 7.96, "CAIADO": 3.16, "ZEMA": 2.86, "ALDO": 0, "CURY": 1.63, "JOAQUIM": 0, "AÉCIO": 0, "OUTROS": 2.04, "DACIOLO": 0 },
   "t1_matrix": {
     "LULA": { "LULA": 1, "FLAVIO": 0, "RENAN": 0.11, "CAIADO": 0, "ZEMA": 0, "ALDO": 0, "OUTROS": 0 },
     "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.07, "CAIADO": 0.04, "ZEMA": 0.04, "ALDO": 0, "OUTROS": 0 },
-    "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.11, "CAIADO": 0.06, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.5, "AÉCIO": 0.1, "JOAQUIM": 0.05, "OUTROS": 0.1 },
-    "CIRO": { "LULA": 0.3, "FLAVIO": 0.1, "RENAN": 0.2, "CAIADO": 0.1, "ZEMA": 0.1, "ALDO": 0.1, "CURY": 0.1, "OUTROS": 0.2 },
-    "SORAYA": { "LULA": 0.1, "FLAVIO": 0.4, "RENAN": 0.1, "CAIADO": 0.3, "ZEMA": 0.1, "CURY": 0.1, "OUTROS": 0.1 },
-    "FELLIPE": { "LULA": 0.0, "FLAVIO": 0.2, "RENAN": 0.1, "CAIADO": 0.1, "ZEMA": 0.7, "CURY": 0.1, "OUTROS": 0.1 },
-    "KELMON": { "LULA": 0.0, "FLAVIO": 0.8, "RENAN": 0.05, "CAIADO": 0.05, "ZEMA": 0.05, "DACIOLO": 0.2, "OUTROS": 0.05 },
-    "SOFIA": { "LULA": 0.8, "FLAVIO": 0, "RENAN": 0.05, "ALDO": 0.2, "OUTROS": 0.15 },
-    "PERICLES": { "LULA": 0.8, "FLAVIO": 0, "RENAN": 0.05, "ALDO": 0.2, "OUTROS": 0.15 },
-    "VERA": { "LULA": 0.7, "FLAVIO": 0, "RENAN": 0.05, "ALDO": 0.2, "OUTROS": 0.25 },
-    "EYMAEL": { "LULA": 0.1, "FLAVIO": 0.4, "RENAN": 0.05, "CAIADO": 0.3, "DACIOLO": 0.2, "JOAQUIM": 0.2, "OUTROS": 0.1 }
+    "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.11, "CAIADO": 0.06, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.5, "AÉCIO": 0.1, "JOAQUIM": 0.05, "OUTROS": 0.1 }
   },
   "t1_matrix_state": {
-    "21": {
-      "LULA": { "LULA": 1, "FLAVIO": 0, "RENAN": 0.07, "CAIADO": 0, "ZEMA": 0, "ALDO": 0, "CURY": 0.01, "OUTROS": 0 },
-      "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.12, "CAIADO": 0.04, "ZEMA": 0.04, "ALDO": 0, "OUTROS": 0 },
-      "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.11, "CAIADO": 0.06, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.95, "AÉCIO": 0.1, "JOAQUIM": 0.05, "OUTROS": 0.1 }
-    },
-    "22": {
-      "LULA": { "LULA": 1, "FLAVIO": 0, "RENAN": 0.11, "CAIADO": 0, "ZEMA": 0, "ALDO": 0, "OUTROS": 0, "CURY": 0.01 },
-      "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.11, "CAIADO": 0.06, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.95, "AÉCIO": 0.1, "JOAQUIM": 0.05, "OUTROS": 0.1 }
-    },
-    "31": {
-      "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.07, "CAIADO": 0.04, "ZEMA": 0.08, "ALDO": 0, "OUTROS": 0 },
-      "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.06, "CAIADO": 0.06, "ZEMA": 0.35, "ALDO": 0.25, "CURY": 0.5, "OUTROS": 0.1 }
-    },
-    "52": {
-      "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.07, "CAIADO": 0.08, "ZEMA": 0.04, "ALDO": 0, "OUTROS": 0 },
-      "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.06, "CAIADO": 0.35, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.5, "OUTROS": 0.1 }
-    }
+    "21": { "LULA": { "LULA": 1, "FLAVIO": 0, "RENAN": 0.07, "CAIADO": 0, "ZEMA": 0, "ALDO": 0, "CURY": 0.01, "OUTROS": 0 }, "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.12, "CAIADO": 0.04, "ZEMA": 0.04, "ALDO": 0, "OUTROS": 0 } },
+    "31": { "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.07, "CAIADO": 0.04, "ZEMA": 0.08, "ALDO": 0, "OUTROS": 0 }, "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.06, "CAIADO": 0.06, "ZEMA": 0.35, "ALDO": 0.25, "CURY": 0.5, "OUTROS": 0.1 } },
+    "52": { "JAIR": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.07, "CAIADO": 0.08, "ZEMA": 0.04, "ALDO": 0, "OUTROS": 0 }, "SIMONE": { "LULA": 0.5, "FLAVIO": 0.5, "RENAN": 0.06, "CAIADO": 0.35, "ZEMA": 0.06, "ALDO": 0.25, "CURY": 0.5, "OUTROS": 0.1 } }
   },
   "t1_mults": { "21": { "CURY": 1.27 }, "33": { "FLAVIO": 1.1 }, "35": { "RENAN": 1.19 } },
   "t2_migr": { "LULA": 0, "FLAVIO": 1, "RENAN": 0.63, "CAIADO": 0.86, "ZEMA": 0.86, "ALDO": 0.48, "CURY": 0.5, "AÉCIO": 0.45, "JOAQUIM": 0.45, "OUTROS": 0.5 },
@@ -1070,54 +1052,27 @@ const DEFAULT_SCENARIO = {
   "t2_mode": "organic"
 };
 
-// --- CONTROLADOR PRINCIPAL DO APLICATIVO ---
+// --- CONTROLADOR PRINCIPAL DA APLICAÇÃO ---
 const app = {
     map: null,
-    layers: { brazil: null, cities: null, zones: null },
-    data: { 
-        base22: null, 
-        round1: null, 
-        round2: null, 
-        geoJsonCache: null, 
-        names: {}, 
-        brazilGeoJson: null, 
-        zonasGeoJson: null,
-        lvCache: {}
-    },
-    state: { 
-        turn: 1, 
-        view: 'states', 
-        selectedId: null, 
-        selectedName: "Brasil", 
-        selectedScope: null, 
-        activeCityId: null, 
-        t1_polls: {}, 
-        t1_matrix: {}, 
-        t1_matrix_state: {}, 
-        t1_mults: {}, 
-        t2_finalists: [], 
-        t2_polls: {}, 
-        t2_migr: {}, 
-        t2_mults: {}, 
-        active_candidates: {}, 
-        t2_mode: 'organic',
-        level: 'national',
-        previousLayer: null,
-        lvLayer: null,
-        munCodeLV: null,
-        currentLVProps: null
+    layers: { brazil: null, cities: null, lv: null },
+    data: { base22: null, round1: null, round2: null, geoJson: null, names: {}, brazilGeoJson: null, zonasGeoJson: null, lvCache: {} },
+    state: {
+        turn: 1, view: 'states', selectedId: null, selectedName: "Brasil", selectedScope: null, activeCityId: null,
+        level: 'national', previousLayer: null, munCodeLV: null, currentLVProps: null,
+        ignored: new Set(), customColors: JSON.parse(localStorage.getItem('v26_colors') || '{}'),
+        t1_polls: {}, t1_matrix: {}, t1_matrix_state: {}, t1_mults: {}, t2_finalists: [], t2_polls: {}, t2_migr: {}, t2_mults: {}, active_candidates: {}, t2_mode: 'organic'
     },
 
     init: async () => {
         app.initTheme();
         
-        // CONFIGURAÇÃO DO LEAFLET COM CANVAS ALTA DEFINIÇÃO E REATOR GEOMÉTRICO LISOS (DO INDEX 37)
+        // CONFIGURAÇÃO DO LEAFLET COM CANVAS E RENDERIZADOR VETORIAL LISO
         app.map = L.map('map', { 
             center: [-15, -50], 
             zoom: 4, 
             zoomControl: false, 
             preferCanvas: true,
-            background: '#1a1a1a',
             renderer: L.canvas({ tolerance: 0, padding: 0.5 })
         });
         
@@ -1129,31 +1084,6 @@ const app = {
         await app.loadData();
     },
 
-    // REPROJEÇÃO DE COORDENADAS EPSG:5880 PARA EPSG:4326 (SISTEMA DE MAPA INDEX 37)
-    reprojectGeoJSON: (geojson) => {
-        const transformCoords = (coords) => {
-            if (typeof coords[0] === 'number') {
-                if (Math.abs(coords[1]) <= 90 && Math.abs(coords[0]) <= 180) {
-                    return coords;
-                }
-                const [lng, lat] = proj4("EPSG:5880", "EPSG:4326", coords);
-                return [lng, lat];
-            }
-            return coords.map(transformCoords);
-        };
-
-        const features = geojson.features.map(f => ({
-            ...f,
-            geometry: {
-                type: f.geometry.type,
-                coordinates: transformCoords(f.geometry.coordinates)
-            }
-        }));
-
-        return { type: "FeatureCollection", features };
-    },
-
-    // TRATAMENTO DE IMAGENS LOCAL -> REMOTA -> VETORIAL
     handleImgFallback: (img, candId) => {
         if (!img.dataset.triedRemote) {
             img.dataset.triedRemote = 'true';
@@ -1176,11 +1106,13 @@ const app = {
         const color = cand ? cand.color : '#3b82f6';
         const name = cand ? cand.name : id;
         const initials = name.substring(0, 2).toUpperCase();
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-            <rect width="100" height="100" fill="${color}"/>
-            <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-weight="900" font-size="42">${initials}</text>
-        </svg>`;
-        return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+        return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="${color}"/><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-weight="900" font-size="42">${initials}</text></svg>`);
+    },
+
+    getCandColor: (partyOrId) => {
+        const cand = CONFIG.candidates.find(c => c.id === partyOrId || c.party === partyOrId);
+        if (cand && app.state.customColors[cand.id]) return app.state.customColors[cand.id];
+        return cand ? cand.color : '#555555';
     },
 
     initTheme: () => {
@@ -1190,19 +1122,13 @@ const app = {
     },
     toggleTheme: () => {
         const isLight = document.body.classList.contains('light-theme');
-        if (isLight) {
-            document.body.classList.remove('light-theme');
-            localStorage.setItem('eleicoes-view-theme', 'dark');
-            app.updateThemeUI('dark');
-        } else {
-            document.body.classList.add('light-theme');
-            localStorage.setItem('eleicoes-view-theme', 'light');
-            app.updateThemeUI('light');
-        }
+        const next = isLight ? 'dark' : 'light';
+        document.body.classList.toggle('light-theme', !isLight);
+        localStorage.setItem('eleicoes-view-theme', next);
+        app.updateThemeUI(next);
     },
     updateThemeUI: (theme) => {
-        const icon = document.getElementById('themeIcon');
-        const text = document.getElementById('themeText');
+        const icon = document.getElementById('themeIcon'), text = document.getElementById('themeText');
         if (icon && text) {
             icon.className = theme === 'light' ? 'fas fa-sun' : 'fas fa-moon';
             text.innerText = theme === 'light' ? 'Claro' : 'Escuro';
@@ -1246,9 +1172,9 @@ const app = {
                     app.data.zonasGeoJson = await zRes.json(); 
                     app.processZonasGeoJson(); 
                 } 
-            } catch(ez) { console.warn("Zonas eleitorais não encontradas."); }
+            } catch(ez) {}
             await app.loadBrazilLayer(); app.runSimulation(); 
-        } catch(e) { console.error(e); alert("Carregando base eleitoral padrão."); } finally { loader.classList.add('hidden'); }
+        } catch(e) { console.error(e); } finally { loader.classList.add('hidden'); }
     },
 
     exportConfig: () => {
@@ -1305,50 +1231,45 @@ const app = {
     
     getFeatureId: (feature, scope) => {
         const p = feature.properties;
-        if (scope === 'zonas' || scope === 'locais') return String(p.CD_MUN_I || p.ID_UNICO || p.local_id) + '_' + String(p.ZE_NUM || '');
-        if (scope === 'municipios') return String(p.CD_MUN || p.id || p.codarea || p.geocodigo || p.CD_MUN_I || '');
+        if (scope === 'locais') return p.ID_UNICO || p.local_id || p.CD_MUN_I;
+        if (scope === 'zonas') return String(p.CD_MUN_I) + '_' + String(p.ZE_NUM);
+        if (scope === 'municipios') return String(p.CD_MUN || p.id || p.geocodigo || p.CD_MUN_I || p.codarea || '');
         return String(p.CD_UF || (STATES.find(x => x.sigla === p.sigla)||{}).id || p.id || '');
     },
 
-    // CARREGAMENTO DAS CAMADAS ESTADUAIS
     loadBrazilLayer: async () => {
         if(app.layers.brazil) {
             if(!app.map.hasLayer(app.layers.brazil)) app.layers.brazil.addTo(app.map);
             app.layers.brazil.setStyle((f) => app.getStyle(f, 'estados')); return;
         }
         const res = await fetch('https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson');
-        const data = await res.json();
+        app.data.brazilGeoJson = await res.json();
         const ufMap = {'AC':'12','AL':'27','AM':'13','AP':'16','BA':'29','CE':'23','DF':'53','ES':'32','GO':'52','MA':'21','MG':'31','MS':'50','MT':'51','PA':'15','PB':'25','PE':'26','PI':'22','PR':'41','RJ':'33','RN':'24','RO':'11','RR':'14','RS':'43','SC':'42','SE':'28','SP':'35','TO':'17'};
-        data.features.forEach(f => f.properties.id = ufMap[f.properties.sigla] || f.properties.id);
+        app.data.brazilGeoJson.features.forEach(f => f.properties.id = ufMap[f.properties.sigla]);
 
-        app.data.brazilGeoJson = data;
         app.layers.brazil = L.geoJSON(app.data.brazilGeoJson, {
             style: (f) => app.getStyle(f, 'estados'),
             smoothFactor: 0,
             onEachFeature: (f, l) => {
                 l.on('click', () => {
                     if(app.state.view === 'states') app.loadStateCities(app.getFeatureId(f,'estados'), f.properties.NM_UF || f.properties.name);
-                    else app.selectRegion(f.properties.id, f.properties.name, 'estados');
                 });
                 app.bindTooltip(l, 'estados');
             }
         }).addTo(app.map);
     },
     
-    // CAMADA MUNICIPAL (MALHA UNIFICADA COM CACHE - SISTEMA INDEX 37)
     fetchGeoJsonCache: async () => {
-        if (app.data.geoJsonCache) return app.data.geoJsonCache;
-        const url = "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json";
-        const res = await fetch(url);
-        const data = await res.json();
-        app.data.geoJsonCache = data;
-        return data;
+        if (app.data.geoJson) return app.data.geoJson;
+        const res = await fetch("https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json");
+        app.data.geoJson = await res.json();
+        return app.data.geoJson;
     },
 
     loadAllMunicipalities: async () => {
         const loader = document.getElementById('loader'); loader.classList.remove('hidden');
         if(app.layers.brazil && app.map.hasLayer(app.layers.brazil)) app.map.removeLayer(app.layers.brazil);
-        if(app.layers.zones) { app.map.removeLayer(app.layers.zones); app.layers.zones = null; }
+        if(app.layers.lv) { app.map.removeLayer(app.layers.lv); app.layers.lv = null; }
         if(app.layers.cities) app.map.removeLayer(app.layers.cities); app.layers.cities = null;
 
         const data = await app.fetchGeoJsonCache();
@@ -1356,48 +1277,38 @@ const app = {
             style: (f) => app.getStyle(f, 'municipios'),
             smoothFactor: 0,
             onEachFeature: (f, l) => {
-                const id = app.getFeatureId(f, 'municipios');
-                const name = app.data.names[id] || f.properties.NM_MUN || f.properties.name;
                 l.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
-                    if (app.data.zonasGeoJson && app.data.zonasGeoJson.features.some(zf => String(zf.properties.CD_MUN_I) === id)) {
-                        app.loadCityZones(id, name); return;
-                    }
-                    app.selectRegion(id, name, 'municipios');
+                    const cityId = app.getFeatureId(f, 'municipios');
+                    const cityName = f.properties.NM_MUN||f.properties.name;
+                    app.selectRegion(cityId, cityName, 'municipios');
                 });
                 app.bindTooltip(l, 'municipios');
             }
         }).addTo(app.map);
         if (app.layers.cities.getBounds().isValid()) app.map.fitBounds(app.layers.cities.getBounds());
-        loader.classList.add('hidden');
+        app.state.level = 'municipality'; loader.classList.add('hidden');
     },
     
     loadStateCities: async (ufId, ufName) => {
         if(app.state.view === 'all_cities') return;
         const loader = document.getElementById('loader'); loader.classList.remove('hidden');
         document.getElementById('loaderMsg').innerText = `Carregando ${ufName}...`;
-        if(app.layers.zones) { app.map.removeLayer(app.layers.zones); app.layers.zones = null; }
+        if(app.layers.lv) { app.map.removeLayer(app.layers.lv); app.layers.lv = null; }
         if(app.layers.cities) { app.map.removeLayer(app.layers.cities); app.layers.cities = null; }
         if(app.layers.brazil) app.map.removeLayer(app.layers.brazil);
 
         const fullData = await app.fetchGeoJsonCache();
-        const stateFeatures = fullData.features.filter(f => {
-            const cod = app.getFeatureId(f, 'municipios');
-            return cod && cod.toString().startsWith(ufId);
-        });
-
-        app.layers.cities = L.geoJSON({ type:"FeatureCollection", features: stateFeatures }, {
+        const feats = fullData.features.filter(f => app.getFeatureId(f, 'municipios').startsWith(ufId));
+        app.layers.cities = L.geoJSON({ type:"FeatureCollection", features:feats }, {
             style: (f) => app.getStyle(f, 'municipios'),
             smoothFactor: 0,
             onEachFeature: (f, l) => {
-                const id = app.getFeatureId(f, 'municipios');
-                const name = app.data.names[id] || f.properties.NM_MUN || f.properties.name;
                 l.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
-                    if (app.data.zonasGeoJson && app.data.zonasGeoJson.features.some(zf => String(zf.properties.CD_MUN_I) === id)) {
-                        app.loadCityZones(id, name); return;
-                    }
-                    app.selectRegion(id, name, 'municipios');
+                    const cityId = app.getFeatureId(f, 'municipios');
+                    const cityName = f.properties.NM_MUN||f.properties.name;
+                    app.selectRegion(cityId, cityName, 'municipios');
                 });
                 app.bindTooltip(l, 'municipios');
             }
@@ -1406,81 +1317,203 @@ const app = {
         app.selectRegion(ufId, ufName, 'estados'); loader.classList.add('hidden');
     },
     
-    loadCityZones: (cityId, cityName) => {
-        const loader = document.getElementById('loader'); loader.classList.remove('hidden');
-        document.getElementById('loaderMsg').innerText = `Carregando Zonas de ${cityName}...`;
-        if(app.layers.cities) { app.map.removeLayer(app.layers.cities); app.layers.cities = null; }
-        if(app.layers.zones) { app.map.removeLayer(app.layers.zones); app.layers.zones = null; }
-        if(app.layers.brazil) app.map.removeLayer(app.layers.brazil);
+    // --- LOCAIS DE VOTAÇÃO (LV 2022) COM REPROJEÇÃO PROJ4 (EPSG:5880 -> EPSG:4326) ---
+    loadLVForMunicipality: async (munCode, munName) => {
+        const loader = document.getElementById('loader');
+        loader.querySelector('h3').textContent = `Carregando Locais de Votação (${munName})...`;
+        loader.classList.remove('hidden');
 
-        const feats = app.data.zonasGeoJson.features.filter(f => String(f.properties.CD_MUN_I) === cityId);
-        app.layers.zones = L.geoJSON({ type: "FeatureCollection", features: feats }, {
-            style: (f) => app.getStyle(f, 'zonas'),
-            smoothFactor: 0,
-            onEachFeature: (f, l) => {
-                l.on('click', (e) => {
-                    L.DomEvent.stopPropagation(e);
-                    const zoneId = app.getFeatureId(f, 'zonas');
-                    app.selectRegion(zoneId, `Zona ${f.properties.ZE_NUM} - ${cityName}`, 'zonas');
-                });
-                app.bindTooltip(l, 'zonas');
+        try {
+            if (!app.data.lvCache[munCode]) {
+                const resp = await fetch(`estados_mun/${munCode}.geojson`);
+                if (!resp.ok) throw new Error("Arquivo LV não encontrado para " + munCode);
+                const raw = await resp.json(); delete raw.crs;
+                app.data.lvCache[munCode] = raw;
             }
-        }).addTo(app.map);
-        if (app.layers.zones.getBounds().isValid()) app.map.fitBounds(app.layers.zones.getBounds());
-        app.selectRegion(cityId, cityName, 'municipios'); app.state.activeCityId = cityId; loader.classList.add('hidden');
+
+            const reprojected = app.reprojectGeoJSON(app.data.lvCache[munCode]);
+            const features = reprojected.features;
+            if (!features || features.length === 0) throw new Error("Nenhum local de votação encontrado.");
+
+            if (app.layers.cities) { app.state.previousLayer = app.layers.cities; app.map.removeLayer(app.layers.cities); app.layers.cities = null; }
+            else if (app.layers.brazil) { app.state.previousLayer = app.layers.brazil; app.map.removeLayer(app.layers.brazil); app.layers.brazil = null; }
+
+            const lvLayer = L.geoJSON({ type: "FeatureCollection", features }, {
+                smoothFactor: 0,
+                style: f => app.getStyle(f, 'locais'),
+                onEachFeature: (f, layer) => {
+                    const lvId = f.properties.ID_UNICO || f.properties.local_id || f.properties.CD_MUN_I;
+                    const lvName = f.properties.nm_locvot || f.properties.local_id || "Local de Votação";
+                    layer.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        app.selectRegion(lvId, lvName, 'locais', f.properties);
+                    });
+                    app.bindTooltip(layer, 'locais', f.properties);
+                }
+            }).addTo(app.map);
+
+            app.layers.lv = lvLayer;
+            app.state.level = 'lv';
+            app.state.munCodeLV = munCode;
+            document.getElementById('btnBack').style.display = 'flex';
+
+            setTimeout(() => {
+                app.map.invalidateSize();
+                const bounds = lvLayer.getBounds();
+                if (bounds.isValid()) app.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+            }, 100);
+
+        } catch(e) {
+            console.warn(e.message);
+        } finally {
+            loader.classList.add('hidden');
+            app.updateSidebarRight();
+        }
+    },
+
+    reprojectGeoJSON: (geojson) => {
+        const transformCoords = (coords) => {
+            if (typeof coords[0] === 'number') {
+                if (Math.abs(coords[1]) <= 90 && Math.abs(coords[0]) <= 180) return coords;
+                const [lng, lat] = proj4("EPSG:5880", "EPSG:4326", coords);
+                return [lng, lat];
+            }
+            return coords.map(transformCoords);
+        };
+        const features = geojson.features.map(f => ({
+            ...f,
+            geometry: { type: f.geometry.type, coordinates: transformCoords(f.geometry.coordinates) }
+        }));
+        return { type: "FeatureCollection", features };
+    },
+
+    parseLVVotes: (props) => {
+        const turn = app.state.turn;
+        const suffix = ` ${turn}T`;
+        const votes = {};
+        Object.entries(props).forEach(([key, val]) => {
+            if (typeof val !== 'number' || !key.endsWith(suffix)) return;
+            const clean = key.slice(0, -suffix.length).trim();
+            const m = clean.match(/^(.+?)\s*\((.+?)\)/);
+            if (!m) return;
+            const name = m[1].toUpperCase(), party = m[2];
+            
+            // Mapear candidatos de 2022 para chaves de matriz
+            let cand22Key = 'SIMONE';
+            if (name.includes('LULA')) cand22Key = 'LULA';
+            else if (name.includes('BOLSONARO') || name.includes('JAIR')) cand22Key = 'JAIR';
+            else if (name.includes('CIRO')) cand22Key = 'CIRO';
+            else if (name.includes('TEBET') || name.includes('SIMONE')) cand22Key = 'SIMONE';
+            else if (name.includes('SORAYA')) cand22Key = 'SORAYA';
+            else if (name.includes('DAVILA') || name.includes('FELLIPE')) cand22Key = 'FELLIPE';
+            else if (name.includes('KELMON') || name.includes('PADRE')) cand22Key = 'KELMON';
+            
+            votes[cand22Key] = (votes[cand22Key] || 0) + val;
+        });
+        return votes;
+    },
+
+    // SIMULAÇÃO EM TEMPO REAL PARA UM POLÍGONO DE LOCAL DE VOTAÇÃO
+    calculateLV2026: (props) => {
+        const votes22 = app.parseLVVotes(props);
+        const ufId = app.state.munCodeLV ? app.state.munCodeLV.substring(0,2) : "35";
+        const activeIds = CONFIG.candidates.filter(c => app.state.active_candidates[c.id] !== false).map(c => c.id);
+        const simVotes = {};
+
+        if (app.state.turn === 1) {
+            activeIds.forEach(candId => {
+                let sum = 0;
+                SOURCES_2022.forEach(src => {
+                    const rawVal = app.getMatrixValue(ufId, src.id, candId);
+                    let totalActiveWeight = 0; activeIds.forEach(cid => { totalActiveWeight += app.getMatrixValue(ufId, src.id, cid); });
+                    let finalFactor = totalActiveWeight > 0 ? rawVal / totalActiveWeight : 0;
+                    sum += (votes22[src.id] || 0) * finalFactor;
+                });
+                if(app.state.t1_mults[ufId] && app.state.t1_mults[ufId][candId]) sum *= app.state.t1_mults[ufId][candId];
+                simVotes[candId] = Math.round(sum);
+            });
+        } else {
+            const [id1, id2] = app.state.t2_finalists;
+            if (id1 && id2) {
+                let vA = 0, vB = 0;
+                Object.entries(votes22).forEach(([cid, v]) => {
+                    if (cid === id1) vA += v;
+                    else if (cid === id2) vB += v;
+                    else {
+                        let ratio = app.state.t2_migr[cid] !== undefined ? app.state.t2_migr[cid] : 0.5;
+                        vA += v * (1 - ratio); vB += v * ratio;
+                    }
+                });
+                simVotes[id1] = Math.round(vA); simVotes[id2] = Math.round(vB);
+            }
+        }
+        return simVotes;
     },
 
     goBack: () => {
-        if (app.layers.zones) {
-            const ufId = app.state.activeCityId.substring(0,2);
-            const ufName = (STATES.find(s=>s.id === ufId)||{}).nome || "Estado";
-            app.map.removeLayer(app.layers.zones); app.layers.zones = null;
-            app.loadStateCities(ufId, ufName);
-        } else app.resetSelection();
+        if (app.state.level === 'lv') {
+            if (app.layers.lv) app.map.removeLayer(app.layers.lv);
+            if (app.state.previousLayer) {
+                if (app.state.previousLayer === app.layers.brazil) app.layers.brazil.addTo(app.map);
+                else if (app.state.previousLayer === app.layers.cities) app.layers.cities.addTo(app.map);
+                app.state.previousLayer = null;
+            }
+            app.layers.lv = null;
+            app.state.level = 'municipality';
+            app.state.selectedId = app.state.munCodeLV;
+            app.state.selectedName = "Município";
+            app.refreshUI();
+            return;
+        }
+        app.resetSelection();
     },
 
     resetSelection: () => {
-        app.state.selectedId = null; app.state.selectedName = "Brasil"; app.state.selectedScope = null; app.state.activeCityId = null;
+        app.state.selectedId = null; app.state.selectedName = "Brasil"; app.state.selectedScope = null; app.state.activeCityId = null; app.state.currentLVProps = null;
         document.getElementById('btnBack').style.display = 'none';
-        if (app.layers.zones) { app.map.removeLayer(app.layers.zones); app.layers.zones = null; }
+        if (app.layers.lv) { app.map.removeLayer(app.layers.lv); app.layers.lv = null; }
         if (app.layers.cities) { app.map.removeLayer(app.layers.cities); app.layers.cities = null; }
         if (app.layers.brazil) {
             if (!app.map.hasLayer(app.layers.brazil)) app.layers.brazil.addTo(app.map);
             app.layers.brazil.setStyle((f) => app.getStyle(f, 'estados'));
         } else app.loadBrazilLayer();
         app.map.setView([-15, -50], 4);
-        document.getElementById('viewModeSelect').value = 'states'; app.state.view = 'states';
+        document.getElementById('viewModeSelect').value = 'states'; app.state.view = 'states'; app.state.level = 'national';
         if(window.innerWidth <= 768) app.mobileNav('config');
         app.updateSidebarRight();
     },
     
-    // SISTEMA DE ESTILO CARTOGRÁFICO DE ALTA PRECISÃO DO INDEX 37
     getStyle: (feature, scope) => {
         const id = app.getFeatureId(feature, scope);
-        const colorInfo = app.getColorForId(id, scope);
         return { 
-            fillColor: colorInfo.fill, 
-            weight: scope === 'estados' ? 1.2 : (scope === 'zonas' ? 0.5 : 0.35), 
+            fillColor: app.getColorForId(id, scope, feature.properties).fill, 
+            weight: scope === 'estados' ? 1.2 : (scope === 'locais' ? 0.5 : 0.35), 
             color: '#ffffff', 
             opacity: 0.9, 
-            fillOpacity: 0.95,
-            lineJoin: 'round',
-            lineCap: 'round'
+            fillOpacity: 0.95 
         };
     },
-    getColorForId: (id, scope) => {
-        if (!id) return { fill: '#333' };
-        const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return { fill: '#333' };
-        let votes;
-        if (scope === 'zonas' || scope === 'locais') votes = dataset.zonas ? dataset.zonas[id] : null;
-        else if (id.length === 2 && scope === 'estados') votes = dataset.estados[id];
-        else votes = dataset.municipios[id];
+    getColorForId: (id, scope, props) => {
+        let votes = {};
+        if (scope === 'locais' && props) {
+            votes = app.calculateLV2026(props);
+        } else {
+            const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return { fill: '#333' };
+            if (scope === 'zonas') votes = dataset.zonas ? dataset.zonas[id] : null;
+            else if (id.length === 2 && scope === 'estados') votes = dataset.estados[id];
+            else votes = dataset.municipios[id];
+        }
         if(!votes) return { fill: '#333' };
 
         let max = -1, winner = null, total = 0;
-        for(let c in votes) { total += votes[c]; if(votes[c] > max) { max = votes[c]; winner = c; } }
+        for(let c in votes) {
+            if (!app.state.ignored.has(c)) {
+                total += votes[c]; if(votes[c] > max) { max = votes[c]; winner = c; }
+            }
+        }
         const cand = CONFIG.candidates.find(c => c.id === winner);
-        return { fill: app.getDiscreteColor(cand ? cand.color : '#555', total > 0 ? (max/total)*100 : 0) };
+        const candColor = cand ? app.getCandColor(cand.id) : '#555';
+        return { fill: app.getDiscreteColor(candColor, total > 0 ? (max/total)*100 : 0) };
     },
     
     generateStaticMap: async (format) => {
@@ -1488,16 +1521,12 @@ const app = {
         setTimeout(() => {
             try {
                 let features = []; let scope = 'municipios';
-                if (app.layers.zones && app.state.activeCityId) {
-                    features = app.data.zonasGeoJson.features.filter(f => String(f.properties.CD_MUN_I) === app.state.activeCityId); scope = 'zonas';
+                if (app.state.level === 'lv' && app.layers.lv) {
+                    features = app.layers.lv.toGeoJSON().features; scope = 'locais';
                 } else if (app.state.view === 'states' && !app.state.selectedId) {
                     features = app.data.brazilGeoJson.features; scope = 'estados';
                 } else if (app.state.selectedId && app.state.selectedId.length === 2) {
-                    if(!app.data.geoJsonCache) throw new Error("Dados municipais não carregados.");
-                    features = app.data.geoJsonCache.features.filter(f => {
-                        const id = app.getFeatureId(f, 'municipios');
-                        return id && id.toString().startsWith(app.state.selectedId);
-                    }); scope = 'municipios';
+                    features = app.data.geoJson.features.filter(f => app.getFeatureId(f, 'municipios').startsWith(app.state.selectedId)); scope = 'municipios';
                 } else {
                     features = app.data.brazilGeoJson.features; scope = 'estados';
                 }
@@ -1505,9 +1534,16 @@ const app = {
 
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 features.forEach(f => { const scan = (coords) => { coords.forEach(pt => { if(typeof pt[0]==='number'){ if(pt[0]<minX)minX=pt[0]; if(pt[0]>maxX)maxX=pt[0]; if(pt[1]<minY)minY=pt[1]; if(pt[1]>maxY)maxY=pt[1]; } else scan(pt); }); }; if(f.geometry && f.geometry.type.includes('Polygon')) scan(f.geometry.coordinates); });
-                const w = 4096, latD = maxY - minY, lonD = maxX - minX, h = w / (lonD/latD); const proj = (x,y) =>[(x-minX)*(w/lonD), (maxY-y)*(h/latD)];
+                const w = 3840, latD = maxY - minY, lonD = maxX - minX, h = w / (lonD/latD); const proj = (x,y) =>[(x-minX)*(w/lonD), (maxY-y)*(h/latD)];
                 let svg = '';
-                features.forEach(f => { const id = app.getFeatureId(f, scope); const col = app.getColorForId(id, scope).fill; let d = ''; const draw = (r) => { let p=''; r.forEach((pt,i)=>{ const[px,py]=proj(pt[0],pt[1]); p+=(i===0?'M':'L')+px.toFixed(1)+','+py.toFixed(1); }); return p+'Z '; }; if(f.geometry.type==='Polygon') f.geometry.coordinates.forEach(r=>d+=draw(r)); else if(f.geometry.type==='MultiPolygon') f.geometry.coordinates.forEach(p=>p.forEach(r=>d+=draw(r))); svg+=`<path d="${d}" fill="${col}" stroke="#fff" stroke-width="${scope==='estados'? 2 : 0.5}"/>`; });
+                features.forEach(f => {
+                    const id = app.getFeatureId(f, scope);
+                    const col = app.getColorForId(id, scope, f.properties).fill;
+                    let d = ''; const draw = (r) => { let p=''; r.forEach((pt,i)=>{ const[px,py]=proj(pt[0],pt[1]); p+=(i===0?'M':'L')+px.toFixed(1)+','+py.toFixed(1); }); return p+'Z '; };
+                    if(f.geometry.type==='Polygon') f.geometry.coordinates.forEach(r=>d+=draw(r));
+                    else if(f.geometry.type==='MultiPolygon') f.geometry.coordinates.forEach(p=>p.forEach(r=>d+=draw(r)));
+                    svg+=`<path d="${d}" fill="${col}" stroke="#fff" stroke-width="${scope==='estados'? 2 : 0.5}"/>`;
+                });
                 const finalSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">${svg}</svg>`;
                 const fname = `mapa_eleicoes_${app.state.selectedName}`;
                 if(format==='svg') saveAs(new Blob([finalSvg],{type:"image/svg+xml;charset=utf-8"}), `${fname}.svg`);
@@ -1536,30 +1572,36 @@ const app = {
         return { r: (c>>16)&255, g: (c>>8)&255, b: c&255 };
     },
 
-    bindTooltip: (l, s) => {
+    bindTooltip: (l, scope, extraProps) => {
         l.bindTooltip(() => {
-            const id = app.getFeatureId(l.feature, s);
-            const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return "Sem dados";
-            let votes;
-            if (s === 'zonas' || s === 'locais') votes = dataset.zonas ? dataset.zonas[id] : null;
-            else if (id.length===2 && s==='estados') votes = dataset.estados[id];
-            else votes = dataset.municipios[id];
+            const id = app.getFeatureId(l.feature, scope);
+            let votes = {};
+            if (scope === 'locais' && extraProps) {
+                votes = app.calculateLV2026(extraProps);
+            } else {
+                const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return "Sem dados";
+                if (scope === 'zonas') votes = dataset.zonas ? dataset.zonas[id] : null;
+                else if (id.length===2 && scope==='estados') votes = dataset.estados[id];
+                else votes = dataset.municipios[id];
+            }
             if(!votes) return `Sem dados`;
 
-            const sorted = Object.entries(votes).sort((a,b)=>b[1]-a[1]);
+            const sorted = Object.entries(votes).filter(([c]) => !app.state.ignored.has(c)).sort((a,b)=>b[1]-a[1]);
+            if(sorted.length === 0) return `Sem votos válidos`;
+
             const winnerCand = CONFIG.candidates.find(c=>c.id===sorted[0][0]);
-            let title = l.feature.properties.NM_MUN || l.feature.properties.NM_UF || l.feature.properties.name;
-            if (s === 'zonas' || s === 'locais') title = `Zona ${l.feature.properties.ZE_NUM} - ${l.feature.properties.MUN_NOME || name}`;
+            let title = l.feature.properties.nm_locvot || l.feature.properties.NM_MUN || l.feature.properties.NM_UF || l.feature.properties.name || "Local de Votação";
             const pct = (sorted[0][1] / (sorted.reduce((a,b)=>a+b[1],0)||1)) * 100;
             const photoUrl = LOCAL_PHOTOS[winnerCand.id];
+            const candColor = app.getCandColor(winnerCand.id);
 
             return `
                 <div class="custom-tooltip">
                     <div class="tt-head">${title}</div>
                     <div class="tt-body">
-                        <img src="${photoUrl}" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid ${winnerCand.color}" onerror="app.handleImgFallback(this, '${winnerCand.id}')">
+                        <img src="${photoUrl}" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid ${candColor}" onerror="app.handleImgFallback(this, '${winnerCand.id}')">
                         <div>
-                            <div style="color:${winnerCand.color}; font-weight:800">${winnerCand.name} (${winnerCand.party})</div>
+                            <div style="color:${candColor}; font-weight:800">${winnerCand.name}</div>
                             <div style="font-weight:900;">${pct.toFixed(2)}% (${sorted[0][1].toLocaleString('pt-BR')} votos)</div>
                         </div>
                     </div>
@@ -1571,7 +1613,7 @@ const app = {
     refreshMap: () => {
         if(app.layers.brazil) app.layers.brazil.setStyle((f) => app.getStyle(f, 'estados'));
         if(app.layers.cities) app.layers.cities.setStyle((f) => app.getStyle(f, 'municipios'));
-        if(app.layers.zones) app.layers.zones.setStyle((f) => app.getStyle(f, 'zonas'));
+        if(app.layers.lv) app.layers.lv.setStyle((f) => app.getStyle(f, 'locais'));
     },
 
     renderLegend: () => {
@@ -1583,7 +1625,6 @@ const app = {
         });
     },
 
-    // RENDERIZAR PAINEL E SLIDERS (ONINPUT = TEXTO EM TEMPO REAL, ONCHANGE = CÁLCULO CARTOGRÁFICO)
     renderUI: () => {
         const c = document.getElementById('slidersT1'); c.innerHTML = '';
         CONFIG.candidates.forEach(cand => {
@@ -1591,6 +1632,7 @@ const app = {
             const val = app.state.t1_polls[cand.id] !== undefined ? app.state.t1_polls[cand.id] : 0.00;
             const photoUrl = LOCAL_PHOTOS[cand.id];
             const partyBadge = app.getPartyLogoHtml(cand.party);
+            const candColor = app.getCandColor(cand.id);
 
             const div = document.createElement('div');
             div.className = `slider-box ${isActive ? '' : 'inactive'}`;
@@ -1598,10 +1640,10 @@ const app = {
                 <div class="slider-header">
                     <div class="cand-info-group">
                         <input type="checkbox" ${isActive ? 'checked' : ''} onchange="app.toggleCandidate('${cand.id}', this.checked)">
-                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color: ${cand.color}" onerror="app.handleImgFallback(this, '${cand.id}')">
+                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color: ${candColor}" onerror="app.handleImgFallback(this, '${cand.id}')">
                         <div class="cand-name-party">
                             <span class="cand-name-text">${cand.name}</span>
-                            <div class="cand-party-tag" style="color:${cand.color}">
+                            <div class="cand-party-tag" style="color:${candColor}">
                                 ${partyBadge}
                             </div>
                         </div>
@@ -1703,16 +1745,17 @@ const app = {
             const current = app.state.t2_polls[cand.id] !== undefined ? app.state.t2_polls[cand.id] : 50.00;
             const photoUrl = LOCAL_PHOTOS[cand.id];
             const partyBadge = app.getPartyLogoHtml(cand.party);
+            const candColor = app.getCandColor(cand.id);
 
             const div = document.createElement('div');
             div.className = `slider-box ${app.state.t2_mode === 'organic' ? 'inactive' : ''}`;
             div.innerHTML = `
                 <div class="slider-header">
                     <div class="cand-info-group">
-                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color: ${cand.color}" onerror="app.handleImgFallback(this, '${cand.id}')">
+                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color: ${candColor}" onerror="app.handleImgFallback(this, '${cand.id}')">
                         <div class="cand-name-party">
                             <span class="cand-name-text">${cand.name}</span>
-                            <div class="cand-party-tag" style="color:${cand.color}">${partyBadge}</div>
+                            <div class="cand-party-tag" style="color:${candColor}">${partyBadge}</div>
                         </div>
                     </div>
                     <div style="display:flex; align-items:center; gap:2px;">
@@ -1756,9 +1799,15 @@ const app = {
         el.style.color = Math.abs(tot - 100) < 0.05 ? 'var(--accent-green)' : '#facc15';
     },
 
-    selectRegion: (id, name, scope) => {
-        app.state.selectedId = id; app.state.selectedName = name; app.state.selectedScope = scope;
+    selectRegion: (id, name, scope, extraProps) => {
+        app.state.selectedId = id; app.state.selectedName = name; app.state.selectedScope = scope; app.state.currentLVProps = extraProps || null;
         document.getElementById('btnBack').style.display = 'flex';
+
+        if (id.length === 7 && app.state.level !== 'lv') {
+            app.loadLVForMunicipality(id, name);
+            return;
+        }
+
         if(window.innerWidth <= 768) app.mobileNav('results');
         app.updateSidebarRight();
     },
@@ -1766,42 +1815,93 @@ const app = {
     updateSidebarRight: () => {
         const title = document.getElementById('regionName'), sub = document.getElementById('regionType'), list = document.getElementById('resultsContainer');
         title.innerText = app.state.selectedName;
-        let subTxt = "Nacional"; if (app.state.selectedId) { if (app.state.selectedScope === 'zonas' || app.state.selectedScope === 'locais') subTxt = "Zona Eleitoral"; else if (app.state.selectedId.length === 2) subTxt = "Estado"; else subTxt = "Município"; }
+        let subTxt = "Nacional";
+        if (app.state.level === 'lv' && app.state.currentLVProps) {
+            subTxt = "Local de Votação";
+        } else if (app.state.selectedId) {
+            if (app.state.selectedScope === 'zonas') subTxt = "Zona Eleitoral";
+            else if (app.state.selectedId.length === 2) subTxt = "Estado";
+            else subTxt = "Município";
+        }
         sub.innerText = subTxt; list.innerHTML = '';
 
-        const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return;
         let votes = {};
-        if(app.state.selectedId) {
-            if (app.state.selectedScope === 'zonas' || app.state.selectedScope === 'locais') votes = dataset.zonas ? dataset.zonas[app.state.selectedId] : {};
-            else if(app.state.selectedId.length === 2) votes = dataset.estados[app.state.selectedId];
-            else votes = dataset.municipios[app.state.selectedId];
-        } else votes = dataset.nacional;
+        if (app.state.level === 'lv' && app.state.currentLVProps) {
+            votes = app.calculateLV2026(app.state.currentLVProps);
+        } else {
+            const dataset = app.state.turn === 1 ? app.data.round1 : app.data.round2; if(!dataset) return;
+            if(app.state.selectedId) {
+                if (app.state.selectedScope === 'zonas') votes = dataset.zonas ? dataset.zonas[app.state.selectedId] : {};
+                else if(app.state.selectedId.length === 2) votes = dataset.estados[app.state.selectedId];
+                else votes = dataset.municipios[app.state.selectedId];
+            } else votes = dataset.nacional;
+        }
         if(!votes) return;
 
-        const sorted = Object.entries(votes).sort((a,b)=>b[1]-a[1]); const total = sorted.reduce((a,b)=>a+b[1],0);
-        if(document.getElementById('totalVotesVal')) document.getElementById('totalVotesVal').innerText = total.toLocaleString('pt-BR');
+        let totalValid = 0;
+        Object.entries(votes).forEach(([c, v]) => {
+            if (!app.state.ignored.has(c)) totalValid += v;
+        });
+
+        if(document.getElementById('totalVotesVal')) document.getElementById('totalVotesVal').innerText = totalValid.toLocaleString('pt-BR');
+
+        const sorted = Object.entries(votes).sort((a,b) => {
+            const aIgn = app.state.ignored.has(a[0]), bIgn = app.state.ignored.has(b[0]);
+            if (aIgn !== bIgn) return aIgn ? 1 : -1;
+            return b[1] - a[1];
+        });
 
         sorted.forEach(([cid, v]) => {
             const cand = CONFIG.candidates.find(c=>c.id===cid); if(!cand) return;
             if(app.state.turn===1 && app.state.active_candidates[cand.id] === false && v === 0) return;
-            const pct = total > 0 ? (v/total)*100 : 0;
+            const isIgnored = app.state.ignored.has(cid);
+            const pct = (!isIgnored && totalValid > 0) ? (v/totalValid)*100 : 0;
             const photoUrl = LOCAL_PHOTOS[cand.id];
+            const candColor = app.getCandColor(cand.id);
 
-            const row = document.createElement('div'); row.className = 'cand-row';
+            const row = document.createElement('div'); row.className = `cand-row ${isIgnored ? 'disabled' : ''}`;
             row.innerHTML = `
-                <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${cand.color}" onerror="app.handleImgFallback(this, '${cand.id}')">
+                <div class="cand-check ${isIgnored ? '' : 'checked'}"></div>
+                <div class="cand-color-dot" style="background:${candColor}" title="Personalizar cor"></div>
+                <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${candColor}; width:28px; height:28px;" onerror="app.handleImgFallback(this, '${cand.id}')">
                 <div class="cand-info">
                     <div class="cand-head">
-                        <span>${cand.name} <small style="color:${cand.color}">(${cand.party})</small></span>
-                        <span style="color:${cand.color}; font-weight:900;">${pct.toFixed(2)}%</span>
+                        <span>${cand.name} <small style="color:${candColor}">(${cand.party})</small></span>
+                        <span style="color:${candColor}; font-weight:900;">${isIgnored ? '--' : pct.toFixed(2)+'%'}</span>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width:${pct}%; background:${cand.color}"></div>
-                    </div>
+                    ${!isIgnored ? `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${candColor}"></div></div>` : ''}
                     <div style="text-align:right; font-size:0.68rem; color:var(--text-muted); margin-top:3px; font-weight:700;">${v.toLocaleString('pt-BR')} votos</div>
                 </div>
             `;
+
+            row.querySelector('.cand-check').onclick = (e) => {
+                e.stopPropagation();
+                if (app.state.ignored.has(cid)) app.state.ignored.delete(cid);
+                else app.state.ignored.add(cid);
+                app.refreshUI();
+            };
+
+            row.querySelector('.cand-color-dot').onclick = (e) => {
+                e.stopPropagation();
+                app.openColorPicker(cid, candColor, e.target);
+            };
+
             list.appendChild(row);
+        });
+    },
+
+    openColorPicker: (candId, defColor, el) => {
+        const pickr = Pickr.create({
+            el, theme: 'nano', default: defColor,
+            swatches: ['#de0000', '#3632b6', '#f6ae08', '#17a7e9', '#F58220', '#4169E1', '#363bc7', '#E67E22', '#E74C3C', '#2EBF98', '#8b5cf6'],
+            components: { preview: true, hue: true, interaction: { save: true, clear: false } }
+        });
+        pickr.on('save', (c) => {
+            const hex = c.toHEXA().toString();
+            app.state.customColors[candId] = hex;
+            localStorage.setItem('v26_colors', JSON.stringify(app.state.customColors));
+            app.refreshUI();
+            pickr.destroyAndRemove();
         });
     },
 
@@ -1852,12 +1952,13 @@ const app = {
             let val = ufId ? (app.state.t1_matrix_state[ufId] && app.state.t1_matrix_state[ufId][src] ? app.state.t1_matrix_state[ufId][src][dest.id] : app.state.t1_matrix[src]?.[dest.id]) : (app.state.t1_matrix[src]?.[dest.id]);
             val = Math.round((val||0) * 100);
             const photoUrl = LOCAL_PHOTOS[dest.id];
+            const candColor = app.getCandColor(dest.id);
 
             const div = document.createElement('div'); div.className = 'slider-box';
             div.innerHTML = `
                 <div class="slider-header">
                     <div class="cand-info-group">
-                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${dest.color}" onerror="app.handleImgFallback(this, '${dest.id}')">
+                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${candColor}" onerror="app.handleImgFallback(this, '${dest.id}')">
                         <span style="font-weight:700;">${dest.name}</span>
                     </div>
                     <span id="mod_mtx_${dest.id}" style="font-weight:900; color:var(--accent-blue)">${val}%</span>
@@ -1893,12 +1994,13 @@ const app = {
             if(!cand || (turn===1 && app.state.active_candidates[cand.id] === false)) return;
             const val = store[ufId][cand.id] !== undefined ? store[ufId][cand.id] : 1.0;
             const photoUrl = LOCAL_PHOTOS[cand.id];
+            const candColor = app.getCandColor(cand.id);
 
             const div = document.createElement('div'); div.className = 'slider-box';
             div.innerHTML = `
                 <div class="slider-header">
                     <div class="cand-info-group">
-                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${cand.color}" onerror="app.handleImgFallback(this, '${cand.id}')">
+                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${candColor}" onerror="app.handleImgFallback(this, '${cand.id}')">
                         <span style="font-weight:700;">${cand.name}</span>
                     </div>
                     <span id="mod_mul_${cand.id}" style="font-weight:900; color:var(--accent-blue)">x${val.toFixed(2)}</span>
@@ -1919,7 +2021,7 @@ const app = {
         let html = `
             <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); margin-bottom:15px">
                 Arraste para direcionar a transferência de votos dos candidatos eliminados no 1º turno.<br>
-                <strong style="color:${cand1.color}">${cand1.name} (0%)</strong> &bull; <strong style="color:${cand2.color}">${cand2.name} (100%)</strong>
+                <strong style="color:${app.getCandColor(id1)}">${cand1.name} (0%)</strong> &bull; <strong style="color:${app.getCandColor(id2)}">${cand2.name} (100%)</strong>
             </div>
             <div id="modalMigContent" style="display:flex; flex-direction:column; gap:8px;"></div>
         `;
@@ -1930,18 +2032,19 @@ const app = {
             if(cand.id === id1 || cand.id === id2 || app.state.active_candidates[cand.id] === false) return;
             const ratio = app.state.t2_migr[cand.id] !== undefined ? app.state.t2_migr[cand.id] : 0.5;
             const photoUrl = LOCAL_PHOTOS[cand.id];
+            const candColor = app.getCandColor(cand.id);
 
             const div = document.createElement('div'); div.className = 'slider-box';
             div.innerHTML = `
                 <div class="slider-header">
                     <div class="cand-info-group">
-                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${cand.color}" onerror="app.handleImgFallback(this, '${cand.id}')">
+                        <img src="${photoUrl}" class="cand-avatar" style="--cand-color:${candColor}" onerror="app.handleImgFallback(this, '${cand.id}')">
                         <span style="font-weight:700;">Votos de ${cand.name}</span>
                     </div>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:800; margin-bottom:4px;">
-                    <span style="color:${cand1.color}">${cand1.name}</span>
-                    <span style="color:${cand2.color}">${cand2.name}</span>
+                    <span style="color:${app.getCandColor(id1)}">${cand1.name}</span>
+                    <span style="color:${app.getCandColor(id2)}">${cand2.name}</span>
                 </div>
                 <input type="range" min="0" max="100" value="${ratio*100}" oninput="app.state.t2_migr['${cand.id}'] = this.value/100;">
             `;
@@ -1964,7 +2067,6 @@ const app = {
         }, 50);
     },
 
-    // CÁLCULO DE 1º TURNO PROCESSANDO TODOS OS 11 CANDIDATOS DE 2022
     calculateTurn1: () => {
         const base = app.data.base22.municipios;
         const activeIds = CONFIG.candidates.filter(c => app.state.active_candidates[c.id] !== false).map(c => c.id);
@@ -2098,7 +2200,6 @@ const app = {
         app.data.round2 = res;
     },
 
-    // EXTRAÇÃO DE VOTOS BASE DA ELEIÇÃO DE 2022 USANDO NÚMEROS E SIGLAS
     getVotes22: (obj, key) => {
         let sum = 0;
         const aliases = CAND_2022_ALIASES[key] || [key];
